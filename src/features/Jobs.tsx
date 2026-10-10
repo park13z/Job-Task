@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { AlertCircle, Check, Clock3, History, Pause, Play, RotateCcw, Target } from "lucide-react";
 import type { Job, JobAction, JobEvent, Line, User } from "../shared/contracts";
-import { availableActions, isPlanner } from "../shared/workflow";
+import { availableActions, canActOnJob } from "../shared/workflow";
 import { formatBusinessDate, formatDuration, formatInstant } from "../shared/time";
 import { api, ApiError } from "../lib/api";
 import { friendlyError, operationKey, type Pending } from "../lib/operation";
@@ -20,7 +20,7 @@ export function Jobs({ jobs, lines, user, businessDate, refresh }: { jobs: Job[]
   const [timeline, setTimeline] = useState<{ job: Job; events: JobEvent[] } | null>(null);
   const [timelineError, setTimelineError] = useState("");
   const pending = useRef<{ jobId: string; action: JobAction; request: Pending } | null>(null);
-  const canAct = (job: Job) => user.active && lines.some(line => line.id === job.lineId && line.active && (isPlanner(user.role) || line.memberIds.includes(user.id)));
+  const canAct = (job: Job) => canActOnJob(user, lines, job);
   const act = async (job: Job, action: JobAction) => {
     const body = { expectedVersion: job.version };
     const request = pending.current?.jobId === job.id && pending.current.action === action ? operationKey(pending.current.request, body) : operationKey(null, body);

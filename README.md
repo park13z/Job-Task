@@ -50,6 +50,8 @@ See **[Setup and deployment](docs/SETUP.md)** for the private Wrangler configura
 ```text
 src/features/         React screens and Live Board styles
 src/components/       Shared UI controls
+src/hooks/            Workspace loading, queries and sync policy
+src/lib/              API client and operation helpers
 src/shared/           Contracts, date helpers, workflow rules
 src/worker/           Hono API, sessions, line permissions and D1 operations
 src/pages-worker.ts   Cloudflare Pages advanced-mode entry point
@@ -64,12 +66,13 @@ wrangler.worker.example.jsonc  Local Worker configuration template
 ## Checks
 
 ```bash
-npm run typecheck
+npm run check
+
+# For the full Cloudflare Pages output when preparing your own deployment:
 npm run build:pages
-npm run check:schema
-npx vitest run
+
+# Install a browser first if Chromium is unavailable:
 npx playwright install chromium
-npx playwright test
 ```
 
 The automated tests use local fixtures/test databases; they are **not** evidence that any specific Cloudflare deployment or live Login has been tested. Consult the results in your own environment.
@@ -80,6 +83,7 @@ This public code does **not** include the owner's Cloudflare account identifiers
 
 - Copy the **example** Wrangler files and enter *your own* Cloudflare identifiers in the ignored local configs.
 - Never commit `.env*`, `.dev.vars*`, `.local/`, generated SQL with password hashes, database backups, or production data.
+- Native username/password authentication uses salted password hashes in D1 and an HttpOnly secure session cookie; application roles and line permissions are enforced server-side.
 - No public self-registration is provided. Provision your initial Manager securely before using the app.
 - The software runs on your infrastructure; no access to the maintainer's production account or database is supplied.
 

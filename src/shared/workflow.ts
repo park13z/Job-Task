@@ -1,4 +1,4 @@
-import type { JobAction, JobStatus, Role } from "./contracts";
+import type { Job, JobAction, JobStatus, Line, Role, User } from "./contracts";
 
 export const transitionMap = {
   todo: { start: "in_progress" },
@@ -35,4 +35,14 @@ export function nextStatus(status: JobStatus, action: JobAction): JobStatus | nu
 
 export function isPlanner(role: Role): boolean {
   return role === "manager" || role === "supervisor";
+}
+
+/** UI action visibility only; the Worker rechecks authorization in guarded SQL. */
+export function canActOnJob(
+  user: Pick<User, "id" | "active" | "role">,
+  lines: ReadonlyArray<Pick<Line, "id" | "active" | "memberIds">>,
+  job: Pick<Job, "lineId">,
+): boolean {
+  return user.active && lines.some(line => line.id === job.lineId && line.active &&
+    (isPlanner(user.role) || line.memberIds.includes(user.id)));
 }
