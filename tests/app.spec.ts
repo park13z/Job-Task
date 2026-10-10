@@ -321,3 +321,11 @@ test("Login text caret stays in editable fields, not on headings or empty panel"
   await password.click();
   await expect(password).toBeFocused();
 });
+
+test("Job Task credits its original developer in the footer", async ({ page }) => {
+  await page.goto("/");
+  const footer = page.locator("footer.app-footer");
+  await expect(footer).toContainText("Sanongboon Poona / Truly Green Farms");
+  await expect(footer).toContainText("© 2026");
+  await expect(footer).toContainText("MIT License");
+});

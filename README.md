@@ -87,11 +87,13 @@ This public code does **not** include the owner's Cloudflare account identifiers
 
 Bug reports, suggestions, and pull requests are welcome. Please check **[Contributing](docs/CONTRIBUTING.md)**, keep changes tightly scoped, and avoid including private information in examples or screenshots.
 
-## License and artwork
+## License and developer credit
 
-The source is visible publicly, but an **explicit software license has not been selected yet**. Public visibility alone does not grant general redistribution or commercial-use rights. The project owner should choose a license (for example, MIT or Apache-2.0) before inviting unrestricted reuse.
+**Copyright © 2026 Sanongboon Poona / Truly Green Farms.**
 
-The animated sprite artwork should be reviewed and licensed separately if it will be redistributed or adapted.
+The source code is free to use, modify, and redistribute under the [MIT License](LICENSE), provided the copyright and license notice is retained in copies or substantial portions of the software. Developed by **Sanongboon Poona / Truly Green Farms**.
+
+**Artwork notice:** The animated sprite artwork in `src/features/live-worker-sheet.png` may have separate rights. Its inclusion in this repository is not a representation that third-party artwork rights have been cleared. Check permission before reusing or redistributing the artwork.
 
 ---
 

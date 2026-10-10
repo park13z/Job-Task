@@ -111,7 +111,7 @@ export default function App() {
           {page === "settings" && state.value.me.user.role === "manager" ? <TeamSettings lines={state.value.lines} refresh={refresh} actorId={state.value.me.user.id} /> : page === "profile" ? <UserProfile key={state.value.me.user.id} user={state.value.me.user} refresh={refresh} onChangePassword={() => setChangePasswordOpen(true)} /> : page === "live" ? <LiveBoard lines={state.value.lines} /> : page === "dashboard" ? <Dashboard value={state.value} /> : page === "fill" && isPlanner(state.value.me.user.role) ? <FillTask week={filters.week} lines={state.value.lines} jobs={state.value.jobs} refresh={refresh} /> : <Jobs jobs={state.value.jobs} lines={state.value.lines} user={state.value.me.user} businessDate={state.value.businessDate} refresh={refresh} />}
           {page !== "settings" && page !== "profile" && page !== "live" && state.value.cursor && <div className="mt-6 text-center"><Button variant="outline" onClick={() => void loadMore()}>Load more tasks</Button></div>}
         </>}
-        <footer className="app-footer"><span>JOB TASK / OPERATIONS</span><span className="inline-flex items-center gap-1.5"><Activity size={13} aria-hidden="true" /> America/Toronto · Local production schedule</span></footer>
+        <footer className="app-footer"><span>Developed by Sanongboon Poona / Truly Green Farms · © 2026 · MIT License</span><span className="inline-flex items-center gap-1.5"><Activity size={13} aria-hidden="true" /> America/Toronto · Local production schedule</span></footer>
       </div>
     </main>
     <ChangePassword open={changePasswordOpen} onClose={()=>setChangePasswordOpen(false)} onChanged={()=>refresh(true)}/>
