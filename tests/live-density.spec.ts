@@ -54,106 +54,68 @@ test("Live compresses every row according to screen height, keeps every job, and
   const board = page.locator(".live-board");
   await expect(board.locator("article.live-task")).toHaveCount(8);
   await expect(page.locator(".live-lane h3")).toHaveText(["DONE", "In Progressing", "Paused Today", "Waiting Queue"]);
-  await expect(page.getByRole("region", { name: "In Progressing" }).locator(".live-worker-pacer")).toHaveCount(3);
+  await expect(page.getByRole("region", { name: "In Progressing" }).locator('[data-animation="canvas-frames"]')).toHaveCount(1);
   await expect(page.locator(".live-progress-track")).toHaveCount(2);
   await expect(page.locator(".live-column-headings").first()).toContainText("End Time");
   await expect(page.locator(".live-lane-inProgress .live-column-headings")).toContainText("Est. End");
   await expect(page.locator(".live-lane-inProgress .live-column-headings")).toContainText("Progress");
   await expect(page.locator(".live-progress-track").first()).toHaveText("");
-  const pace = await page.locator(".live-worker-pacer").first().evaluate(element => ({
-    animation: getComputedStyle(element).animationName,
-    duration: getComputedStyle(element).animationDuration,
-    parent: element.closest(".live-worker-track")?.parentElement?.className,
-  }));
-  expect(pace.animation).toContain("live-walk-aisle");
-  expect(pace.duration).toBe("36s");
-  expect(pace.parent).toContain("live-lane-tasks");
-  const worker = board.locator(".live-worker").first();
-  await expect(worker).toHaveJSProperty("tagName", "SPAN");
-  const sprite = await worker.evaluate(element => ({
-    background: getComputedStyle(element.querySelector(".live-worker-upper")!).backgroundImage,
-    size: getComputedStyle(element.querySelector(".live-worker-upper")!).backgroundSize,
-    animation: getComputedStyle(element.querySelector(".live-worker-upper")!).animationName,
-    legGait: getComputedStyle(element.querySelector(".live-worker-leg-left")!).animationName,
-    height: element.getBoundingClientRect().height,
-  }));
-  expect(sprite.background).toContain("live-worker-sheet");
-  expect(sprite.size).not.toBe("auto");
-  expect(sprite.animation).toBe("none");
-  expect(sprite.legGait).toContain("live-left-step");
-  await expect(board.locator(".live-worker-0")).toHaveCount(1);
-  await expect(board.locator(".live-worker-1")).toHaveCount(1);
-  await expect(board.locator(".live-worker-2")).toHaveCount(1);
-  await expect(board.locator(".live-worker-equipment")).toHaveCount(3);
-  // Equipment is attached to the carrier/cart/checker, never animated with a leg.
-  const rigs = await board.locator(".live-worker").evaluateAll(characters => characters.map(character => {
-    const top = getComputedStyle(character.querySelector(".live-worker-upper")!);
-    const equipment = getComputedStyle(character.querySelector(".live-worker-equipment")!);
-    const left = getComputedStyle(character.querySelector(".live-worker-leg-left")!);
-    const right = getComputedStyle(character.querySelector(".live-worker-leg-right")!);
-    return {
-      equipmentAnimation: equipment.animationName,
-      equipmentTransform: equipment.transform,
-      topAnimation: top.animationName,
-      leftGait: left.animationName,
-      rightGait: right.animationName,
-      leftDuration: left.animationDuration,
-      rightDuration: right.animationDuration,
-      masks: [top.clipPath, left.clipPath, right.clipPath, equipment.clipPath],
-    };
-  }));
-  expect(rigs).toHaveLength(3);
-  for (const rig of rigs) {
-    expect(rig.equipmentAnimation).toBe("none");
-    expect(rig.equipmentTransform).toBe("none");
-    expect(rig.topAnimation).toBe("none");
-    expect(rig.leftGait).toBe("live-left-step");
-    expect(rig.rightGait).toBe("live-right-step");
-    expect(rig.leftDuration).toBe("1.28s");
-    expect(rig.rightDuration).toBe("1.28s");
-    expect(rig.masks.every(mask => mask.startsWith("polygon("))).toBe(true);
-  }
-  // Per-character boots must swap stride positions, not simply rotate in place.
-  const alternating = await board.locator(".live-worker").evaluateAll(characters => characters.map(character => {
-    const leg = character.querySelector(".live-worker-leg-left")!;
-    const animation = leg.getAnimations()[0];
-    if (!animation) return false;
-    animation.pause();
-    animation.currentTime = 0;
-    const first = getComputedStyle(leg).transform;
-    animation.currentTime = 640; // 50% of one 1280ms gait.
-    const opposite = getComputedStyle(leg).transform;
-    animation.play();
-    return first !== opposite;
-  }));
-  expect(alternating).toEqual([true, true, true]);
-  // The three walkers overlay the entire In Progress lane instead of being repeated per job.
-  const laneOverlay = await board.locator(".live-lane-inProgress").evaluate(lane => {
+  // One Canvas covers the In Progress lane and draws exactly three fully
+  // composed sprites, never one character group per job row.
+  const track = board.locator('.live-lane-inProgress [data-animation="canvas-frames"]');
+  const canvas = track.locator('canvas.live-worker-canvas');
+  await expect(track).toHaveCount(1);
+  await expect(track).toHaveAttribute("data-cast-size", "3");
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-frame-count", "12");
+  await expect(board.locator(".live-worker-pacer, .live-worker-leg")).toHaveCount(0);
+  const overlay = await board.locator(".live-lane-inProgress").evaluate(lane => {
     const tasks = lane.querySelector<HTMLElement>(".live-lane-tasks");
-    const track = tasks?.querySelector<HTMLElement>(":scope > .live-worker-track");
-    if (!tasks || !track) return false;
-    return getComputedStyle(tasks).position === "relative"
-      && getComputedStyle(track).position === "absolute"
-      && track.getBoundingClientRect().height >= tasks.getBoundingClientRect().height - 1
-      && tasks.querySelectorAll(".live-worker-pacer").length === 3
-      && tasks.querySelectorAll(".live-task .live-worker-pacer").length === 0;
+    const trackNode = tasks?.querySelector<HTMLElement>(':scope > [data-animation="canvas-frames"]');
+    const canvasNode = trackNode?.querySelector("canvas");
+    if (!tasks || !trackNode || !canvasNode) return null;
+    return {
+      taskPosition: getComputedStyle(tasks).position,
+      trackPosition: getComputedStyle(trackNode).position,
+      trackAnimation: getComputedStyle(trackNode).animationName,
+      canvasAnimation: getComputedStyle(canvasNode).animationName,
+      height: trackNode.getBoundingClientRect().height,
+      taskHeight: tasks.getBoundingClientRect().height,
+      pixelWidth: canvasNode.width, pixelHeight: canvasNode.height,
+    };
   });
-  expect(laneOverlay).toBe(true);
-  const firstLeg = board.locator(".live-worker-leg-left").first();
-  const firstStep = await firstLeg.evaluate(el => getComputedStyle(el).transform);
-  await page.waitForTimeout(150);
-  const secondStep = await firstLeg.evaluate(el => getComputedStyle(el).transform);
-  expect(secondStep).not.toBe(firstStep); // Feet really step, not just the whole character bobbing.
-  const workerOffsets = await board.locator(".live-lane-inProgress .live-worker-pacer").evaluateAll(
-    elements => elements.slice(0, 3).map(element => getComputedStyle(element).transform)
-  );
-  expect(new Set(workerOffsets).size).toBe(3);
-  expect(sprite.height).toBeGreaterThanOrEqual(30); // Ultra density deliberately reduces sprite size.
-  const spriteUrl = sprite.background.match(/url\(["']?([^"')]+)["']?\)/)?.[1];
-  expect(spriteUrl).toBeTruthy();
-  const spriteFetch = await page.request.get(spriteUrl!);
-  expect(spriteFetch.status()).toBe(200);
-  expect(spriteFetch.headers()["content-type"]).toContain("image/png");
+  expect(overlay).toBeTruthy();
+  expect(overlay!.taskPosition).toBe("relative");
+  expect(overlay!.trackPosition).toBe("absolute");
+  expect(overlay!.trackAnimation).toBe("none");
+  expect(overlay!.canvasAnimation).toBe("none");
+  expect(overlay!.height).toBeGreaterThanOrEqual(overlay!.taskHeight - 1);
+  expect(overlay!.pixelWidth).toBeGreaterThan(0);
+  expect(overlay!.pixelHeight).toBeGreaterThan(0);
+
+  async function paintedPixels() {
+    return canvas.evaluate(element => {
+      const node = element as HTMLCanvasElement;
+      const context = node.getContext("2d");
+      if (!context) return 0;
+      const pixels = context.getImageData(0, 0, node.width, node.height).data;
+      let total = 0;
+      for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 16) total++;
+      return total;
+    });
+  }
+  await expect.poll(paintedPixels).toBeGreaterThan(100);
+  const firstCanvasFrame = await canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
+  await page.waitForTimeout(300);
+  const nextCanvasFrame = await canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
+  expect(nextCanvasFrame).not.toBe(firstCanvasFrame); // A real sequence, not a CSS shim.
+  const frameRendering = await canvas.evaluate(element => {
+    const node = element as HTMLCanvasElement;
+    return { width: node.width, height: node.height, dpr: window.devicePixelRatio };
+  });
+  expect(frameRendering.width).toBeGreaterThan(100);
+  expect(frameRendering.height).toBeGreaterThan(20);
+
 
   // Strong background separation on both the full-width rows and group bars.
   const colors = await page.locator(".live-lane").evaluateAll(sections => sections.map(section => ({
@@ -173,7 +135,8 @@ test("Live compresses every row according to screen height, keeps every job, and
     await page.getByRole("button", { name: "Refresh live board" }).click();
     const inProgress = board.locator(".live-lane-inProgress");
     await expect(inProgress.locator("article.live-task")).toHaveCount(activeCount);
-    await expect(inProgress.locator(".live-worker-pacer")).toHaveCount(activeCount === 0 ? 0 : 3);
+    await expect(inProgress.locator('[data-animation="canvas-frames"]')).toHaveCount(activeCount === 0 ? 0 : 1);
+    if (activeCount > 0) await expect(inProgress.locator('[data-animation="canvas-frames"]')).toHaveAttribute("data-cast-size", "3");
     await expect(board.locator("article.live-task")).toHaveCount(activeCount);
   }
   allActive = false;
@@ -228,4 +191,13 @@ test("Live compresses every row according to screen height, keeps every job, and
     await page.getByRole("button", { name: "Exit full screen" }).click();
     await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
   }
+  // The Canvas respects OS accessibility settings, without using CSS limb
+  // animations or leaving a requestAnimationFrame loop running indefinitely.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+  await expect.poll(paintedPixels).toBeGreaterThan(100);
+  await page.waitForTimeout(170); // allow the one-frame still render on media change
+  const stillFrame = await canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
+  await page.waitForTimeout(210);
+  expect(await canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL())).toBe(stillFrame);
 });

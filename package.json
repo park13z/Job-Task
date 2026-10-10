@@ -15,7 +15,9 @@
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "check:schema": "node scripts/check-schema.mjs",
-    "check": "npm run typecheck && npm run build && npm run check:schema && npm run test",
+    "animation:generate": "node scripts/generate-live-walk-frames.mjs --write",
+    "check:animation": "node scripts/generate-live-walk-frames.mjs --check",
+    "check": "npm run typecheck && npm run check:animation && npm run build && npm run check:schema && npm run test",
     "build:pages": "npm run build && esbuild src/pages-worker.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js --external:node:crypto"
   },
   "dependencies": {
@@ -47,6 +49,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "esbuild": "^0.28.2",
     "miniflare": "^5.20261006.1-alpha",
+    "sharp": "^0.35.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
