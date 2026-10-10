@@ -1,0 +1,138 @@
+/* Job Task / Live Character Animation
+   Isolated decorative walking system. Never controls job state or layout rows.
+   One trip down-and-back = 36s; each independent left/right gait = 1.28s.
+   Equipment remains stationary relative to each character while feet move.
+*/
+/* One decorative walking group per In Progress lane, without changing the task rows. */
+.live-board .live-worker-track {
+  position: absolute; inset: 0 2px;
+  container-type: inline-size;
+  z-index: 3; overflow: visible; pointer-events: none;
+}
+.live-board .live-worker-pacer {
+  --live-sprite-width: 94px;
+  --live-sprite-height: 73px;
+  --live-gait-duration: 1.28s;
+  position: absolute; left: 0; top: 50%;
+  width: var(--live-sprite-width); height: var(--live-sprite-height);
+  margin-top: calc(var(--live-sprite-height) * -.5);
+  will-change: transform;
+  /* One out-and-back circuit now takes 36s (formerly 15s). */
+  animation: live-walk-aisle 36s linear infinite;
+}
+/* Three workers stay 1/3 of the 36s route apart, independent of job count. */
+.live-board .live-worker-pacer-1 { animation-delay: -12s; }
+.live-board .live-worker-pacer-2 { animation-delay: -24s; }
+.live-board .live-worker { display: block; position: relative; width: 100%; height: 100%; }
+.live-board .live-worker-0 { --sprite-x: 0px; }
+.live-board .live-worker-1 { --sprite-x: calc(var(--live-sprite-width) * -1); }
+.live-board .live-worker-2 { --sprite-x: calc(var(--live-sprite-width) * -2); }
+/* Each source cell is a still illustration, not a frame-by-frame sprite.
+   Keep the props and torso on stationary layers. Only opaque boot-shaped
+   cuts from the source image are allowed to participate in the gait. */
+.live-board .live-worker-upper,
+.live-board .live-worker-equipment,
+.live-board .live-worker-leg {
+  position: absolute; inset: 0; display: block;
+  background-image: url("./live-worker-sheet.png");
+  background-repeat: no-repeat;
+  background-size: calc(var(--live-sprite-width) * 3) var(--live-sprite-height);
+  background-position: var(--sprite-x) 0;
+}
+.live-board .live-worker-upper { z-index: 1; }
+.live-board .live-worker-equipment { z-index: 4; pointer-events: none; }
+.live-board .live-worker-leg {
+  will-change: transform;
+  animation-duration: var(--live-gait-duration);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.live-board .live-worker-leg-left { animation-name: live-left-step; }
+.live-board .live-worker-leg-right { animation-name: live-right-step; }
+/* Brown-haired crate carrier: hips ~y=57, left boot x=24–43, right x=47–65.
+   The crate stays on its own top layer even where it overlaps the trousers. */
+.live-board .live-worker-0 .live-worker-upper {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 67% 100%, 67% 71%, 22% 71%, 22% 100%, 0 100%);
+}
+.live-board .live-worker-0 .live-worker-leg-left {
+  clip-path: polygon(24% 71%, 44% 71%, 43% 85%, 39% 96%, 22% 100%, 20% 83%);
+  transform-origin: 34% 72%;
+}
+.live-board .live-worker-0 .live-worker-leg-right {
+  clip-path: polygon(45% 71%, 64% 71%, 64% 86%, 70% 100%, 52% 100%, 47% 85%);
+  transform-origin: 54% 72%;
+}
+.live-board .live-worker-0 .live-worker-equipment {
+  clip-path: polygon(41% 32%, 98% 32%, 98% 83%, 41% 83%);
+}
+/* Pink-haired cart pusher: feet occupy the left side of the sprite.
+   All three cart wheels and the entire stack of boxes stay stationary. */
+.live-board .live-worker-1 .live-worker-upper {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 47% 100%, 47% 69%, 9% 69%, 9% 100%, 0 100%);
+}
+.live-board .live-worker-1 .live-worker-leg-left {
+  clip-path: polygon(12% 66%, 32% 66%, 32% 79%, 25% 94%, 10% 93%, 9% 78%);
+  transform-origin: 21% 69%;
+}
+.live-board .live-worker-1 .live-worker-leg-right {
+  clip-path: polygon(29% 68%, 46% 68%, 49% 89%, 41% 99%, 29% 93%, 27% 81%);
+  transform-origin: 37% 70%;
+}
+.live-board .live-worker-1 .live-worker-equipment {
+  clip-path: polygon(46% 26%, 100% 26%, 100% 100%, 46% 100%);
+}
+/* Blue-haired clipboard checker: the paper/board stays above both legs. */
+.live-board .live-worker-2 .live-worker-upper {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 65% 100%, 65% 73%, 22% 73%, 22% 100%, 0 100%);
+}
+.live-board .live-worker-2 .live-worker-leg-left {
+  clip-path: polygon(25% 73%, 42% 73%, 42% 84%, 39% 96%, 25% 96%, 21% 83%);
+  transform-origin: 34% 74%;
+}
+.live-board .live-worker-2 .live-worker-leg-right {
+  clip-path: polygon(43% 73%, 61% 73%, 61% 89%, 63% 100%, 46% 100%, 42% 84%);
+  transform-origin: 52% 74%;
+}
+.live-board .live-worker-2 .live-worker-equipment {
+  clip-path: polygon(59% 33%, 99% 33%, 99% 81%, 59% 81%);
+}
+.live-board .live-worker::after {
+  content: ""; position: absolute; bottom: -2px; left: 32%; width: 40%; height: 3px;
+  border-radius: 50%; background: #33434d47; filter: blur(2px);
+}
+/* A full 1.28-second stride has two alternating steps:
+   0% left boot in front; 25% left lifts; 50% right boot in front;
+   75% right lifts. Boots exchange horizontal positions, not just angles. */
+@keyframes live-left-step {
+  0%, 100% { transform: translate3d(calc(var(--live-sprite-width) * .18), 0, 0) rotate(-9deg); z-index: 2; }
+  25% { transform: translate3d(calc(var(--live-sprite-width) * .07), calc(var(--live-sprite-width) * -.08), 0) rotate(2deg); z-index: 2; }
+  50% { transform: translate3d(calc(var(--live-sprite-width) * -.02), 0, 0) rotate(9deg); z-index: 1; }
+  75% { transform: translate3d(calc(var(--live-sprite-width) * .07), 0, 0) rotate(-2deg); z-index: 1; }
+}
+@keyframes live-right-step {
+  0%, 100% { transform: translate3d(calc(var(--live-sprite-width) * -.18), 0, 0) rotate(9deg); z-index: 1; }
+  25% { transform: translate3d(calc(var(--live-sprite-width) * -.08), 0, 0) rotate(-2deg); z-index: 1; }
+  50% { transform: translate3d(calc(var(--live-sprite-width) * .02), 0, 0) rotate(-9deg); z-index: 2; }
+  75% { transform: translate3d(calc(var(--live-sprite-width) * -.08), calc(var(--live-sprite-width) * -.08), 0) rotate(2deg); z-index: 2; }
+}
+@keyframes live-walk-aisle {
+  0% { transform: translate3d(0,0,0) scaleX(1); }
+  49.8% { transform: translate3d(calc(100cqw - var(--live-sprite-width)),0,0) scaleX(1); }
+  50% { transform: translate3d(calc(100cqw - var(--live-sprite-width)),0,0) scaleX(-1); }
+  99.8% { transform: translate3d(0,0,0) scaleX(-1); }
+  100% { transform: translate3d(0,0,0) scaleX(1); }
+}
+
+
+/* The Live board provides its density state; animation owns sprite sizing. */
+.live-board[data-density="compact"] .live-worker-pacer { --live-sprite-width: 73px; --live-sprite-height: 57px; }
+.live-board[data-density="dense"] .live-worker-pacer { --live-sprite-width: 56px; --live-sprite-height: 44px; }
+.live-board[data-density="ultra"] .live-worker-pacer { --live-sprite-width: 43px; --live-sprite-height: 34px; }
+@media (max-width: 700px) {
+  .live-board .live-worker-pacer { --live-sprite-width: 60px; --live-sprite-height: 47px; }
+}
+/* Hide movement only when reduced motion is requested. */
+@media (prefers-reduced-motion: reduce) {
+  .live-board .live-worker-pacer,
+  .live-board .live-worker-leg { animation: none !important; }
+}

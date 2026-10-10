@@ -13,15 +13,6 @@ function shortTimestamp(instant: number, today: string): string {
   return day === today ? clock.format(instant) : `${formatBusinessDate(day)} ${clock.format(instant)}`;
 }
 
-/** Three original anime-chibi workers lifted from the approved visual mockup. */
-function LiveWorker({ variant }: { variant: number }) {
-  return <span className={"live-worker live-worker-" + variant} aria-hidden="true">
-    <span className="live-worker-upper" />
-    <span className="live-worker-leg live-worker-leg-left" />
-    <span className="live-worker-leg live-worker-leg-right" />
-  </span>;
-}
-
 export function LiveTask({ job, lines, today }: { job: Job; lines: Line[]; today: string }) {
   const line = lines.find(item => item.id === job.lineId);
   const active = job.status === "in_progress";
@@ -57,11 +48,4 @@ export function LiveTask({ job, lines, today }: { job: Job; lines: Line[]; today
         {jobStatusLabel[job.status]}</span>
     </div>
   </article>;
-}
-
-export function LiveWorkers() {
-  return <div className="live-worker-track" aria-hidden="true">{[0, 1, 2].map(variant =>
-    <div className={"live-worker-pacer live-worker-pacer-" + variant} key={variant}>
-      <LiveWorker variant={variant} />
-    </div>)}</div>;
 }

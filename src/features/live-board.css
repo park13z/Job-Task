@@ -13,7 +13,6 @@
   overflow: visible;
 }
 .live-board .live-lane-inProgress .live-lane-tasks { position: relative; overflow: visible; }
-.live-board .live-lane-inProgress .live-worker-track { z-index: 10; }
 .live-board .live-lane-header { border-bottom: 0; padding: 11px 16px; }
 .live-board .live-lane-header h3 { letter-spacing: -.01em; }
 .live-board .live-lane .live-column-headings,
@@ -70,66 +69,6 @@
   100% { transform: translateX(230%) scaleX(.3); transform-origin: right; }
 }
 
-/* One decorative walking group per In Progress lane, without changing the task rows. */
-.live-board .live-worker-track {
-  position: absolute; inset: 0 2px;
-  container-type: inline-size;
-  z-index: 3; overflow: visible; pointer-events: none;
-}
-.live-board .live-worker-pacer {
-  --live-sprite-width: 94px;
-  --live-sprite-height: 73px;
-  position: absolute; left: 0; top: 50%;
-  width: var(--live-sprite-width); height: var(--live-sprite-height);
-  margin-top: calc(var(--live-sprite-height) * -.5);
-  will-change: transform;
-  animation: live-walk-aisle 15s linear infinite;
-}
-/* Three original fantasy-chibi characters total, staggered along the In Progress lane. */
-.live-board .live-worker-pacer-1 { animation-delay: -5s; }
-.live-board .live-worker-pacer-2 { animation-delay: -10s; }
-.live-board .live-worker { display: block; position: relative; width: 100%; height: 100%; }
-.live-board .live-worker-0 { --sprite-x: 0px; }
-.live-board .live-worker-1 { --sprite-x: calc(var(--live-sprite-width) * -1); }
-.live-board .live-worker-2 { --sprite-x: calc(var(--live-sprite-width) * -2); }
-.live-board .live-worker-upper, .live-board .live-worker-leg {
-  position: absolute; inset: 0; display: block;
-  background-image: url("./live-worker-sheet.png");
-  background-repeat: no-repeat;
-  background-size: calc(var(--live-sprite-width) * 3) var(--live-sprite-height);
-  background-position: var(--sprite-x) 0;
-  will-change: transform;
-}
-.live-board .live-worker-upper {
-  clip-path: inset(0 0 24% 0);
-  animation: live-upper-step .44s ease-in-out infinite alternate;
-}
-.live-board .live-worker-1 .live-worker-upper { clip-path: inset(0 0 13% 0); }
-.live-board .live-worker-leg-left {
-  clip-path: inset(71% 47% 0 29%);
-  transform-origin: 42% 72%;
-  animation: live-left-step .44s ease-in-out infinite alternate;
-}
-.live-board .live-worker-leg-right {
-  clip-path: inset(71% 24% 0 52%);
-  transform-origin: 59% 72%;
-  animation: live-right-step .44s ease-in-out infinite alternate;
-}
-.live-board .live-worker::after {
-  content: ""; position: absolute; bottom: -2px; left: 32%; width: 40%; height: 3px;
-  border-radius: 50%; background: #33434d47; filter: blur(2px);
-}
-@keyframes live-upper-step { from {transform:translateY(0)} to {transform:translateY(-.5px)} }
-@keyframes live-left-step { from {transform:rotate(-16deg) translateX(-2px)} to {transform:rotate(15deg) translateX(2px)} }
-@keyframes live-right-step { from {transform:rotate(15deg) translateX(2px)} to {transform:rotate(-16deg) translateX(-2px)} }
-@keyframes live-walk-aisle {
-  0% { transform: translate3d(0,0,0) scaleX(1); }
-  49.8% { transform: translate3d(calc(100cqw - var(--live-sprite-width)),0,0) scaleX(1); }
-  50% { transform: translate3d(calc(100cqw - var(--live-sprite-width)),0,0) scaleX(-1); }
-  99.8% { transform: translate3d(0,0,0) scaleX(-1); }
-  100% { transform: translate3d(0,0,0) scaleX(1); }
-}
-
 /* Keep headings and rows aligned in all density modes, including Full screen. */
 .live-board[data-density="compact"] .live-lane { --live-cell-gap: 8px; --live-cell-pad: 10px; }
 .live-board[data-density="dense"] .live-lane { --live-cell-gap: 6px; --live-cell-pad: 8px; }
@@ -145,9 +84,6 @@
 .live-board[data-density="dense"] .live-lane .live-task { padding-block: 4px; min-height: 31px; }
 .live-board[data-density="ultra"] .live-column-headings { padding-block: 2px; font-size: 9px; }
 .live-board[data-density="ultra"] .live-lane .live-task { padding-block: 3px; min-height: 26px; }
-.live-board[data-density="compact"] .live-worker-pacer { --live-sprite-width: 73px; --live-sprite-height: 57px; }
-.live-board[data-density="dense"] .live-worker-pacer { --live-sprite-width: 56px; --live-sprite-height: 44px; }
-.live-board[data-density="ultra"] .live-worker-pacer { --live-sprite-width: 43px; --live-sprite-height: 34px; }
 .live-board[data-density="dense"] .live-line-pill,
 .live-board[data-density="ultra"] .live-line-pill { padding: 1px 3px; font-size: 10px; }
 .live-board[data-density="ultra"] .live-task-state { padding: 1px 3px; font-size: 9px; gap: 2px; }
@@ -180,12 +116,10 @@
   .live-board .live-task-fact::before { content: attr(data-label) ":"; font-weight: 700; font-size: 10px; color: #576b78; }
   .live-board .live-progress-cell { min-height: 8px; }
   .live-board .live-progress-track { max-width: 140px; }
-  .live-board .live-worker-pacer { --live-sprite-width: 60px; --live-sprite-height: 47px; }
 }
 
 /* Decorative loops respect accessibility settings and never announce activity repeatedly. */
 @media (prefers-reduced-motion: reduce) {
-  .live-board .live-worker-pacer, .live-board .live-worker-upper, .live-board .live-worker-leg,
   .live-board .live-progress-track span { animation: none !important; }
   .live-board .live-progress-track span { transform: translateX(55%); }
 }

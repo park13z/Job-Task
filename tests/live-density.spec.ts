@@ -66,7 +66,7 @@ test("Live compresses every row according to screen height, keeps every job, and
     parent: element.closest(".live-worker-track")?.parentElement?.className,
   }));
   expect(pace.animation).toContain("live-walk-aisle");
-  expect(pace.duration).toBe("15s");
+  expect(pace.duration).toBe("36s");
   expect(pace.parent).toContain("live-lane-tasks");
   const worker = board.locator(".live-worker").first();
   await expect(worker).toHaveJSProperty("tagName", "SPAN");
@@ -79,11 +79,54 @@ test("Live compresses every row according to screen height, keeps every job, and
   }));
   expect(sprite.background).toContain("live-worker-sheet");
   expect(sprite.size).not.toBe("auto");
-  expect(sprite.animation).toContain("live-upper-step");
+  expect(sprite.animation).toBe("none");
   expect(sprite.legGait).toContain("live-left-step");
   await expect(board.locator(".live-worker-0")).toHaveCount(1);
   await expect(board.locator(".live-worker-1")).toHaveCount(1);
   await expect(board.locator(".live-worker-2")).toHaveCount(1);
+  await expect(board.locator(".live-worker-equipment")).toHaveCount(3);
+  // Equipment is attached to the carrier/cart/checker, never animated with a leg.
+  const rigs = await board.locator(".live-worker").evaluateAll(characters => characters.map(character => {
+    const top = getComputedStyle(character.querySelector(".live-worker-upper")!);
+    const equipment = getComputedStyle(character.querySelector(".live-worker-equipment")!);
+    const left = getComputedStyle(character.querySelector(".live-worker-leg-left")!);
+    const right = getComputedStyle(character.querySelector(".live-worker-leg-right")!);
+    return {
+      equipmentAnimation: equipment.animationName,
+      equipmentTransform: equipment.transform,
+      topAnimation: top.animationName,
+      leftGait: left.animationName,
+      rightGait: right.animationName,
+      leftDuration: left.animationDuration,
+      rightDuration: right.animationDuration,
+      masks: [top.clipPath, left.clipPath, right.clipPath, equipment.clipPath],
+    };
+  }));
+  expect(rigs).toHaveLength(3);
+  for (const rig of rigs) {
+    expect(rig.equipmentAnimation).toBe("none");
+    expect(rig.equipmentTransform).toBe("none");
+    expect(rig.topAnimation).toBe("none");
+    expect(rig.leftGait).toBe("live-left-step");
+    expect(rig.rightGait).toBe("live-right-step");
+    expect(rig.leftDuration).toBe("1.28s");
+    expect(rig.rightDuration).toBe("1.28s");
+    expect(rig.masks.every(mask => mask.startsWith("polygon("))).toBe(true);
+  }
+  // Per-character boots must swap stride positions, not simply rotate in place.
+  const alternating = await board.locator(".live-worker").evaluateAll(characters => characters.map(character => {
+    const leg = character.querySelector(".live-worker-leg-left")!;
+    const animation = leg.getAnimations()[0];
+    if (!animation) return false;
+    animation.pause();
+    animation.currentTime = 0;
+    const first = getComputedStyle(leg).transform;
+    animation.currentTime = 640; // 50% of one 1280ms gait.
+    const opposite = getComputedStyle(leg).transform;
+    animation.play();
+    return first !== opposite;
+  }));
+  expect(alternating).toEqual([true, true, true]);
   // The three walkers overlay the entire In Progress lane instead of being repeated per job.
   const laneOverlay = await board.locator(".live-lane-inProgress").evaluate(lane => {
     const tasks = lane.querySelector<HTMLElement>(".live-lane-tasks");

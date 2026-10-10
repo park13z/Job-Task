@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock3, Maximize2, Minimize2, PauseCircle, PlayCircle, RefreshCw } from "lucide-react";
 import { Button } from "../components/ui";
-import { LiveTask, LiveWorkers } from "./LiveTask";
+import { LiveTask } from "./LiveTask";
+import { LiveWalkers } from "./live-animation/LiveWalkers";
 import type { Line } from "../shared/contracts";
 import { api } from "../lib/api";
 import { formatBusinessDate, formatInstant } from "../shared/time";
@@ -149,7 +150,7 @@ export function LiveBoard({ lines }: { lines: Line[] }) {
             {data[lane.id].length === 0
               ? <p className="live-lane-empty">{lane.empty}</p>
               : data[lane.id].map(job => <LiveTask key={job.id} job={job} lines={lines} today={data.date} />)}
-            {lane.id === "inProgress" && data.inProgress.length > 0 && <LiveWorkers />}
+            {lane.id === "inProgress" && data.inProgress.length > 0 && <LiveWalkers />}
           </div>
         </section>)}
       </div>
