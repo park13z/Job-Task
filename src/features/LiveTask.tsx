@@ -56,9 +56,12 @@ export function LiveTask({ job, lines, today }: { job: Job; lines: Line[]; today
         job.status === "paused" ? <PauseCircle size={14} aria-hidden="true" /> : <Clock3 size={14} aria-hidden="true" />}
         {jobStatusLabel[job.status]}</span>
     </div>
-    {active && <div className="live-worker-track" aria-hidden="true">{[0, 1, 2].map(variant =>
-      <div className={"live-worker-pacer live-worker-pacer-" + variant} key={variant}>
-        <LiveWorker variant={variant} />
-      </div>)}</div>}
   </article>;
+}
+
+export function LiveWorkers() {
+  return <div className="live-worker-track" aria-hidden="true">{[0, 1, 2].map(variant =>
+    <div className={"live-worker-pacer live-worker-pacer-" + variant} key={variant}>
+      <LiveWorker variant={variant} />
+    </div>)}</div>;
 }

@@ -35,9 +35,10 @@ test("Live compresses every row according to screen height, keeps every job, and
     };
   };
   let count = 8;
+  let allActive = false;
   await page.route("**/api/live", async route => {
     const statuses: JobStatus[] = ["done", "in_progress", "paused", "todo"];
-    const jobs = Array.from({ length: count }, (_, i) => makeJob(i, statuses[i % 4]));
+    const jobs = Array.from({ length: count }, (_, i) => makeJob(i, allActive ? "in_progress" : statuses[i % 4]));
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
       data: {
         date: today,
@@ -53,7 +54,7 @@ test("Live compresses every row according to screen height, keeps every job, and
   const board = page.locator(".live-board");
   await expect(board.locator("article.live-task")).toHaveCount(8);
   await expect(page.locator(".live-lane h3")).toHaveText(["DONE", "In Progressing", "Paused Today", "Waiting Queue"]);
-  await expect(page.getByRole("region", { name: "In Progressing" }).locator(".live-worker-pacer")).toHaveCount(6);
+  await expect(page.getByRole("region", { name: "In Progressing" }).locator(".live-worker-pacer")).toHaveCount(3);
   await expect(page.locator(".live-progress-track")).toHaveCount(2);
   await expect(page.locator(".live-column-headings").first()).toContainText("End Time");
   await expect(page.locator(".live-lane-inProgress .live-column-headings")).toContainText("Est. End");
@@ -66,7 +67,7 @@ test("Live compresses every row according to screen height, keeps every job, and
   }));
   expect(pace.animation).toContain("live-walk-aisle");
   expect(pace.duration).toBe("15s");
-  expect(pace.parent).toContain("live-task-in_progress");
+  expect(pace.parent).toContain("live-lane-tasks");
   const worker = board.locator(".live-worker").first();
   await expect(worker).toHaveJSProperty("tagName", "SPAN");
   const sprite = await worker.evaluate(element => ({
@@ -80,27 +81,21 @@ test("Live compresses every row according to screen height, keeps every job, and
   expect(sprite.size).not.toBe("auto");
   expect(sprite.animation).toContain("live-upper-step");
   expect(sprite.legGait).toContain("live-left-step");
-  await expect(board.locator(".live-worker-0")).toHaveCount(2);
-  await expect(board.locator(".live-worker-1")).toHaveCount(2);
-  await expect(board.locator(".live-worker-2")).toHaveCount(2);
-  // In dense layouts, walking feet must draw above the next painted row.
-  const legsAboveNextRow = await board.locator(".live-lane-inProgress").evaluate(lane => {
-    const [row, next] = lane.querySelectorAll<HTMLElement>(".live-task");
-    const track = row?.querySelector<HTMLElement>(".live-worker-track");
-    const pacer = row?.querySelector<HTMLElement>(".live-worker-pacer");
-    if (!row || !next || !track || !pacer) return false;
-    pacer.style.animation = "none";
-    pacer.style.transform = "translate3d(60px,0,0)";
-    track.style.pointerEvents = "auto";
-    pacer.style.pointerEvents = "auto";
-    const sprite = pacer.getBoundingClientRect();
-    const bottom = Math.max(row.getBoundingClientRect().bottom, next.getBoundingClientRect().top);
-    const y = bottom + (sprite.bottom - bottom) / 2;
-    const x = sprite.left + sprite.width / 2;
-    return y > bottom && y < sprite.bottom
-      && document.elementFromPoint(x, y)?.closest(".live-worker-pacer") === pacer;
+  await expect(board.locator(".live-worker-0")).toHaveCount(1);
+  await expect(board.locator(".live-worker-1")).toHaveCount(1);
+  await expect(board.locator(".live-worker-2")).toHaveCount(1);
+  // The three walkers overlay the entire In Progress lane instead of being repeated per job.
+  const laneOverlay = await board.locator(".live-lane-inProgress").evaluate(lane => {
+    const tasks = lane.querySelector<HTMLElement>(".live-lane-tasks");
+    const track = tasks?.querySelector<HTMLElement>(":scope > .live-worker-track");
+    if (!tasks || !track) return false;
+    return getComputedStyle(tasks).position === "relative"
+      && getComputedStyle(track).position === "absolute"
+      && track.getBoundingClientRect().height >= tasks.getBoundingClientRect().height - 1
+      && tasks.querySelectorAll(".live-worker-pacer").length === 3
+      && tasks.querySelectorAll(".live-task .live-worker-pacer").length === 0;
   });
-  expect(legsAboveNextRow).toBe(true);
+  expect(laneOverlay).toBe(true);
   const firstLeg = board.locator(".live-worker-leg-left").first();
   const firstStep = await firstLeg.evaluate(el => getComputedStyle(el).transform);
   await page.waitForTimeout(150);
@@ -129,6 +124,16 @@ test("Live compresses every row according to screen height, keeps every job, and
   const a11y = await new AxeBuilder({ page }).analyze();
   expect(a11y.violations.filter(item => ["critical", "serious"].includes(item.impact ?? ""))).toEqual([]);
 
+  for (const activeCount of [0, 1, 3, 10]) {
+    allActive = true;
+    count = activeCount;
+    await page.getByRole("button", { name: "Refresh live board" }).click();
+    const inProgress = board.locator(".live-lane-inProgress");
+    await expect(inProgress.locator("article.live-task")).toHaveCount(activeCount);
+    await expect(inProgress.locator(".live-worker-pacer")).toHaveCount(activeCount === 0 ? 0 : 3);
+    await expect(board.locator("article.live-task")).toHaveCount(activeCount);
+  }
+  allActive = false;
   for (const scenario of [
     { width: 1920, height: 1080, jobs: 8 },
     { width: 1366, height: 768, jobs: 24 },

@@ -12,7 +12,7 @@
   z-index: 2;
   overflow: visible;
 }
-.live-board .live-lane-inProgress .live-lane-tasks { overflow: visible; }
+.live-board .live-lane-inProgress .live-lane-tasks { position: relative; overflow: visible; }
 .live-board .live-lane-inProgress .live-worker-track { z-index: 10; }
 .live-board .live-lane-header { border-bottom: 0; padding: 11px 16px; }
 .live-board .live-lane-header h3 { letter-spacing: -.01em; }
@@ -70,7 +70,7 @@
   100% { transform: translateX(230%) scaleX(.3); transform-origin: right; }
 }
 
-/* The walker deliberately passes over row content without reserving any space. */
+/* One decorative walking group per In Progress lane, without changing the task rows. */
 .live-board .live-worker-track {
   position: absolute; inset: 0 2px;
   container-type: inline-size;
@@ -85,7 +85,7 @@
   will-change: transform;
   animation: live-walk-aisle 15s linear infinite;
 }
-/* Three original fantasy-chibi characters in every active row, staggered along the track. */
+/* Three original fantasy-chibi characters total, staggered along the In Progress lane. */
 .live-board .live-worker-pacer-1 { animation-delay: -5s; }
 .live-board .live-worker-pacer-2 { animation-delay: -10s; }
 .live-board .live-worker { display: block; position: relative; width: 100%; height: 100%; }
