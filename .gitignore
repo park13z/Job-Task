@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+playwright-report/
+test-results/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env*
+!.env.example
+backups/
+.local/
+*.log
+task-notes.local.md
+
+# Local production config and operational handoff must never be public.
+wrangler.jsonc
+wrangler.worker.jsonc
+AGENTS.md
+# Historical design/operational documentation stays local; publish only curated public guides.
+docs/*
+!docs/SETUP.md
+!docs/CONTRIBUTING.md

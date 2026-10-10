@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "your-job-task-pages-project",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "your-job-task-db",
+      "database_id": "REPLACE_WITH_YOUR_OWN_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "USER_LIMIT": "500"
+  }
+}
