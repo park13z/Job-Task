@@ -4,14 +4,14 @@ Owner-directed execution checklist. Complete one bounded change at a time; prese
 
 - [x] Verify Git, AGENTS.md, project architecture and baseline.
 - [x] Extract LiveTask presentation from LiveBoard without changing row markup. `npm run check` passed; local commit `4e48502`.
-- [ ] Refactor Dashboard and Job Task components in reviewed, behavior-preserving increments.
-- [ ] Separate frontend state management and business logic without changing contracts.
-- [ ] Review backend/API structure and refactor only safe approved internal modules.
-- [ ] Audit authentication, roles and permissions (read-only unless separately approved).
-- [ ] Strengthen unit, integration and browser regression coverage.
-- [ ] Run final TypeScript, build, schema, regression and security checks.
-- [ ] Review diffs and commit each accepted change to local main.
-- [ ] Confirm clean Git and no orphaned worktrees/logs; document evidence and limitations.
+- [x] Refactor Dashboard and Job Task components in reviewed, behavior-preserving increments (DashboardJobRow, JobDisplay and Job action visibility).
+- [x] Separate frontend state management and business logic without changing contracts (query, sync policy and UI action visibility; React effects remain in hooks).
+- [x] Review backend/API structure and refactor only safe approved internal modules (existing feature modules are already bounded; avoid auth/API/SQL changes).
+- [x] Audit authentication, roles and permissions (source and local integration tests read-only; no policy change).
+- [x] Strengthen unit, integration and browser regression coverage (new query, sync and visibility tests; role/auth/atomicity/browser regressions pass).
+- [x] Run final TypeScript, build, schema, regression and security checks (`npm run check` exit 0 after 2026-10-10 commits).
+- [x] Review diffs and commit each accepted change to local main (`673c434`, `c69fc8e`; independent Gemini read-only review).
+- [x] Confirm clean Git and no orphaned worktrees/logs; document evidence and limitations (single main worktree, clean status; no deploy, push or production testing).
 
 ## Operating rules
 
