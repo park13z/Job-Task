@@ -40,15 +40,35 @@ async function verify(password: string,salt: string,stored: string) {
 const sessionRow=z.strictObject({user_id:z.uuid(),expires_at:z.number().int()});
 const credentialRow=z.strictObject({password_salt:z.string(),password_hash:z.string(),failed_count:z.number().int(),locked_until:z.number().int()});
 const invalid=()=>new ApiError(401,"UNAUTHENTICATED","Invalid username or password.");
-const cookieValue=(token:string,age=SESSION_MS/1000)=>`${COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${age}`;
-export const clearCookie=()=>cookieValue("",0);
-function cookie(request:Request) {
-  const all=request.headers.get("cookie")??"";
-  const raw=all.split(";").map(v=>v.trim()).find(v=>v.startsWith(COOKIE+"="))?.slice(COOKIE.length+1);
-  return raw&&/^[A-Za-z0-9_-]{43}$/.test(raw)?raw:null;
+const LOCAL_COOKIE = "jt_local_session";
+// Explicit opt-in for trusted local HTTP testing only. Production always uses the Secure __Host- cookie.
+function useLocalHttpCookie(request: Request, env?: Env) {
+  if (env?.LOCAL_HTTP_SESSION !== "true") return false;
+  const url = new URL(request.url);
+  if (url.protocol !== "http:") return false;
+  const host = url.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
+  const octets = host.split(".").map(Number);
+  if (octets.length !== 4 || octets.some(x => !Number.isInteger(x) || x < 0 || x > 255)) return false;
+  return octets[0] === 10 || (octets[0] === 192 && octets[1] === 168)
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31);
+}
+function cookieName(request: Request, env?: Env) {
+  return useLocalHttpCookie(request, env) ? LOCAL_COOKIE : COOKIE;
+}
+function cookieValue(request: Request, env: Env | undefined, token: string, age = SESSION_MS / 1000) {
+  const local = useLocalHttpCookie(request, env);
+  return `${local ? LOCAL_COOKIE : COOKIE}=${token}; Path=/; ${local ? "" : "Secure; "}HttpOnly; SameSite=Lax; Max-Age=${age}`;
+}
+export const clearCookie = (request: Request, env: Env) => cookieValue(request, env, "", 0);
+function cookie(request: Request, env: Env) {
+  const name = cookieName(request, env);
+  const all = request.headers.get("cookie") ?? "";
+  const raw = all.split(";").map(v => v.trim()).find(v => v.startsWith(name + "="))?.slice(name.length + 1);
+  return raw && /^[A-Za-z0-9_-]{43}$/.test(raw) ? raw : null;
 }
 export async function authenticate(request:Request,env:Env):Promise<User> {
-  const token=cookie(request);
+  const token=cookie(request, env);
   if(!token)throw new ApiError(401,"UNAUTHENTICATED","Sign in to continue.");
   const row=await env.DB.prepare(`SELECT s.user_id,s.expires_at FROM auth_sessions s
     LEFT JOIN temporary_accounts t ON t.user_id=s.user_id
@@ -80,7 +100,7 @@ async function fail(db:D1Database,keys:{key:string;limit:number}[],at:number) {
     window_started=CASE WHEN ?-window_started>=900000 THEN ? ELSE window_started END`)
     .bind(key,at,at,at,at).run();
 }
-export async function login(db:D1Database,request:Request,username:string,password:string,at:number) {
+export async function login(db:D1Database,request:Request,username:string,password:string,at:number,env?:Env) {
   let stage="throttle";
   try {
     const keys=await throttle(db,username,request,at);
@@ -115,14 +135,14 @@ export async function login(db:D1Database,request:Request,username:string,passwo
           )`).bind(await sha256(raw),user!.id,at,expires,user!.id,at,at),
       ]);
       if(result[0]?.meta.changes!==1||result[1]?.meta.changes!==1)throw invalid();
-      return {cookie:cookieValue(raw,Math.max(1,Math.floor((expires-at)/1000))),user:user!};
+      return {cookie:cookieValue(request,env,raw,Math.max(1,Math.floor((expires-at)/1000))),user:user!};
     }
     await db.batch([
       db.prepare("INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)")
         .bind(await sha256(raw),user!.id,at,at+SESSION_MS),
       db.prepare("DELETE FROM auth_attempts WHERE identifier=?").bind(keys[0].key),
     ]);
-    return {cookie:cookieValue(raw),user:user!};
+    return {cookie:cookieValue(request,env,raw),user:user!};
   } catch (error) {
     // Diagnostic contains only the stage and error class, never username or credentials.
     if (!(error instanceof ApiError && error.status < 500)) {
@@ -131,8 +151,8 @@ export async function login(db:D1Database,request:Request,username:string,passwo
     throw error;
   }
 }
-export async function logout(db:D1Database,request:Request) {
-  const token=cookie(request);
+export async function logout(db:D1Database,request:Request,env:Env) {
+  const token=cookie(request, env);
   if(token)await db.prepare("DELETE FROM auth_sessions WHERE token_hash=?").bind(await sha256(token)).run();
 }
 export async function changePassword(db:D1Database,user:User,oldPassword:string,newPassword:string,at:number) {

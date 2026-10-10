@@ -31,6 +31,29 @@ it("username and password login gives HttpOnly session and logout revokes it",as
     expect((await f.request("/api/me",{token})).status).toBe(401);
   }finally{await f.close();}
 });
+it("enables an HTTP-only LAN development cookie only with explicit local opt-in",async()=>{
+  const f=await createFixture({localHttpSession:true});
+  try{
+    const response=await f.request("/api/auth/login",{user:null,body:{username:"manager",password:TEST_PASSWORD}});
+    expect(response.status).toBe(200);
+    const cookie=response.headers.get("set-cookie")??"";
+    expect(cookie).toContain("jt_local_session=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).not.toContain("Secure");
+    expect(cookie).not.toContain("__Host-jt_session");
+    const token=cookie.match(/jt_local_session=([A-Za-z0-9_-]{43})/)?.[1];
+    expect(token).toBeTruthy();
+    const headers={Cookie:"jt_local_session="+token};
+    expect((await f.request("/api/me",{user:null,headers})).status).toBe(200);
+    expect((await f.request("/api/me",{user:null,headers:{Cookie:"__Host-jt_session="+token}})).status).toBe(401);
+    const logout=await f.request("/api/auth/logout",{user:null,headers,body:{}});
+    expect(logout.status).toBe(200);
+    expect(logout.headers.get("set-cookie")).toContain("jt_local_session=; Path=/;");
+    expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect((await f.request("/api/me",{user:null,headers})).status).toBe(401);
+  }finally{await f.close();}
+});
 it("rejects missing/mismatched origin or wrong media type before writes",async()=>{
   const f=await createFixture();
   try{

@@ -51,20 +51,20 @@ function query(c: { req: { url: string } }) {
 const id = (value: string) => input(uuidSchema, value);
 app.post("/api/auth/login", async c => {
   const data=await body(c,loginInputSchema);
-  const result=await login(c.env.DB,c.req.raw,data.username,data.password,Date.now());
+  const result=await login(c.env.DB,c.req.raw,data.username,data.password,Date.now(),c.env);
   c.header("Set-Cookie",result.cookie);
   return respond(c,emptyDataSchema,{});
 });
 app.post("/api/auth/logout", async c => {
   await body(c,emptyDataSchema);
-  await logout(c.env.DB,c.req.raw);
-  c.header("Set-Cookie",clearCookie());
+  await logout(c.env.DB,c.req.raw,c.env);
+  c.header("Set-Cookie",clearCookie(c.req.raw,c.env));
   return respond(c,emptyDataSchema,{});
 });
 app.post("/api/auth/change-password",async c=>{
   const data=await body(c,changePasswordInputSchema);
   await changePassword(c.env.DB,c.get("actor"),data.oldPassword,data.newPassword,Date.now());
-  c.header("Set-Cookie",clearCookie());
+  c.header("Set-Cookie",clearCookie(c.req.raw,c.env));
   return respond(c,emptyDataSchema,{});
 });
 app.post("/api/users/:id/password",async c=>{

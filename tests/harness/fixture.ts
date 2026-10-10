@@ -25,11 +25,11 @@ const salt="0123456789abcdef".repeat(2);
 const passwordHash=Buffer.from(pbkdf2Sync(TEST_PASSWORD,Buffer.from(salt,"hex"),100_000,32,"sha256")).toString("hex");
 const hash=(token:string)=>createHash("sha256").update(token).digest("hex");
 type RequestOptions={user?:TestUser|null;method?:string;body?:unknown;key?:string;headers?:Record<string,string>;token?:string};
-export async function createFixture(options:{seatBudget?:string;empty?:boolean}={}) {
+export async function createFixture(options:{seatBudget?:string;empty?:boolean;localHttpSession?:boolean}={}) {
   const mf=new Miniflare(convertV4MiniflareOptions({
     scriptPath:fileURLToPath(new URL("../../build/worker.js",import.meta.url)),
     modules:true,compatibilityDate:"2026-10-08",compatibilityFlags:["nodejs_compat"],d1Databases:{DB:"job-task-test"},
-    bindings:{USER_LIMIT:options.seatBudget??"500"},
+    bindings:{USER_LIMIT:options.seatBudget??"500", ...(options.localHttpSession ? {LOCAL_HTTP_SESSION:"true"} : {})},
   }));
   try {
     const database=await mf.getD1Database("DB");
