@@ -1,23 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, Line, User } from "../shared/contracts";
-import { businessDate, mondayWeekRange } from "../shared/time";
+import { businessDate } from "../shared/time";
+import { workspaceQuery, type Filters } from "./workspaceQuery";
+export type { Filters } from "./workspaceQuery";
 import { api, ApiError } from "../lib/api";
 
 type Summary = Awaited<ReturnType<typeof api.summary>>["data"];
 type Me = Awaited<ReturnType<typeof api.me>>["data"];
 type Workspace = { me: Me; lines: Line[]; jobs: Job[]; summary: Summary; cursor: string | null; revision: number; businessDate: string; syncedAt: number };
 export type LoadState = { kind: "loading" } | { kind: "error"; message: string; status: number } | { kind: "ready"; value: Workspace; stale: boolean; message?: string };
-export type Filters = { week: string; lineId: string; status: string };
-
-function query(filters: Filters, cursor?: string): URLSearchParams {
-  const range = mondayWeekRange(filters.week);
-  const params = new URLSearchParams({ from: range.from, to: range.to, limit: "50" });
-  if (filters.lineId) params.set("lineId", filters.lineId);
-  if (filters.status) params.set("status", filters.status);
-  if (cursor) params.set("cursor", cursor);
-  return params;
-}
-
 export function useWorkspace(filters: Filters) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const requestId = useRef(0);
@@ -35,7 +26,7 @@ export function useWorkspace(filters: Filters) {
     if (showLoading) setState({ kind: "loading" });
     try {
       const [me, lines] = await Promise.all([api.me(abort.signal), api.lines(abort.signal)]);
-      const params = query(filtersRef.current);
+      const params = workspaceQuery(filtersRef.current);
       const summaryParams = new URLSearchParams(params);
       summaryParams.delete("limit");
       const [jobs, summary, changes] = await Promise.all([
@@ -93,7 +84,7 @@ export function useWorkspace(filters: Filters) {
     const cursor = current.value.cursor;
     const id = requestId.current;
     try {
-      const page = await api.jobs(query(filtersRef.current, cursor));
+      const page = await api.jobs(workspaceQuery(filtersRef.current, cursor));
       if (id !== requestId.current) return;
       setState(existing => existing.kind === "ready" && existing.value.cursor === cursor
         ? { ...existing, value: { ...existing.value, jobs: [...existing.value.jobs, ...page.data.jobs], cursor: page.data.nextCursor } } : existing);
