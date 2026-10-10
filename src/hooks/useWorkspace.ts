@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, Line, User } from "../shared/contracts";
 import { businessDate } from "../shared/time";
 import { workspaceQuery, type Filters } from "./workspaceQuery";
+import { shouldRefreshWorkspace, workspacePollDelay } from "./workspaceSync";
 export type { Filters } from "./workspaceQuery";
 import { api, ApiError } from "../lib/api";
 
@@ -61,7 +62,7 @@ export function useWorkspace(filters: Filters) {
         try {
           const changes = await api.changes();
           errors = 0;
-          if (changes.data.revision !== current.value.revision || changes.data.businessDate !== current.value.businessDate || current.value.summary.inProgress > 0) await refresh();
+          if (shouldRefreshWorkspace(current.value, changes.data)) await refresh();
         } catch (error) {
           errors++;
           const message = error instanceof Error ? error.message : "Unable to sync data";
@@ -69,7 +70,7 @@ export function useWorkspace(filters: Filters) {
         }
       }
       const role = stateRef.current.kind === "ready" ? stateRef.current.value.me.user.role : "assistant";
-      timer = setTimeout(check, (role === "manager" || role === "supervisor" ? 60_000 : 120_000) * Math.min(2 ** errors, 8));
+      timer = setTimeout(check, workspacePollDelay(role, errors));
     }
     const wake = () => { if (document.visibilityState === "visible" && navigator.onLine) void refresh(); };
     timer = setTimeout(check, 60_000);

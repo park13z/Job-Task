@@ -12,6 +12,7 @@ backups/
 .local/
 *.log
 task-notes.local.md
+.lnwjud/
 
 # Local production config and operational handoff must never be public.
 wrangler.jsonc
