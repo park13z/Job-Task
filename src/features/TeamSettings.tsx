@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, ChevronRight, Factory, UserRoundCog, UsersRound } from "lucide-react";
+import { TeamSettingsNavigation, teamSections, type TeamSection } from "./TeamSettingsNavigation";
 import type { JobTemplate, Line, Role, User } from "../shared/contracts";
 import { api } from "../lib/api";
 import { friendlyError } from "../lib/operation";
 import { Button, Input, Label, Select } from "../components/ui";
 
-type Section = "users" | "lines" | "members" | "catalog";
-const sections = [
-  { id: "users", name: "Users", description: "Accounts and roles", icon: UsersRound },
-  { id: "lines", name: "Production Lines", description: "Manage line names", icon: Factory },
-  { id: "members", name: "Line Members", description: "Team assignments", icon: UserRoundCog },
-  { id: "catalog", name: "Job List", description: "Reusable task names", icon: BookOpen },
-] as const;
 const roles: { value: Role; label: string }[] = [
   { value: "manager", label: "Manager" }, { value: "supervisor", label: "Supervisor" },
   { value: "line_leader", label: "Line leader" }, { value: "assistant", label: "Assistant" },
@@ -22,7 +15,7 @@ const heading = (eyebrow: string, title: string, subtitle: string) => <div class
 </div>;
 
 export function TeamSettings({ lines, refresh, actorId }: { lines: Line[]; refresh: () => Promise<void>; actorId:string }) {
-  const [section, setSection] = useState<Section>("users");
+  const [section, setSection] = useState<TeamSection>("users");
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [name, setName] = useState(""); const [username, setUsername] = useState("");
@@ -53,7 +46,7 @@ export function TeamSettings({ lines, refresh, actorId }: { lines: Line[]; refre
     finally { setBusy(false); }
   };
   const executors = users.filter(user => user.active && (user.role === "line_leader" || user.role === "assistant"));
-  const activeSection = sections.find(item => item.id === section)!;
+  const activeSection = teamSections.find(item => item.id === section)!;
   const activeLines = lines.filter(line => line.active);
   const effectiveCatalogFilter = catalogFilter || activeLines[0]?.id || "unassigned";
   const catalogEntries = templates.filter(template => effectiveCatalogFilter === "all" ||
@@ -67,14 +60,13 @@ export function TeamSettings({ lines, refresh, actorId }: { lines: Line[]; refre
   return <section className="space-y-5">
     <div><p className="section-eyebrow">MANAGEMENT / SETTINGS</p><h2 className="section-title mt-1">Team Settings</h2><p className="section-description">Choose a section to manage. Each area has its own workspace.</p></div>
     <div className="grid items-start gap-5 lg:grid-cols-[225px_minmax(0,1fr)]">
-      <nav aria-label="Team settings sections" className="surface-card flex gap-1 overflow-x-auto p-2 lg:flex-col">
-        {sections.map(item => <Button key={item.id} variant="ghost" aria-current={section === item.id ? "page" : undefined}
-          className={"!min-h-[58px] shrink-0 !justify-start !px-3 text-left lg:w-full " + (section === item.id ? "!bg-[#e7f4f0] !text-[#0a6c5f]" : "!text-[#526976]")}
-          onClick={() => { setSection(item.id); setMessage(""); setEditingUser(null); setEditingLine(null); setEditingTemplate(null); }}>
-          <item.icon size={19} aria-hidden="true"/><span className="flex min-w-0 flex-col items-start gap-1"><strong className="text-xs sm:text-sm">{item.name}</strong><small className="hidden text-[11px] font-normal opacity-80 lg:block">{item.description}</small></span>
-          {section === item.id && <ChevronRight className="ml-auto hidden lg:block" size={16}/>}
-        </Button>)}
-      </nav>
+      <TeamSettingsNavigation selected={section} onSelect={next => {
+        setSection(next);
+        setMessage("");
+        setEditingUser(null);
+        setEditingLine(null);
+        setEditingTemplate(null);
+      }}/>
       <div className="min-w-0 space-y-5" aria-label={activeSection.name}>
         {message && <p role="status" className="rounded-lg border border-border bg-white px-4 py-3 text-sm font-semibold">{message}</p>}
         {section === "users" && <>
