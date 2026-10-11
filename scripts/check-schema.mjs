@@ -27,7 +27,7 @@ const createJob = (id, line, order = 1) => {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, 'Pack 8x341g LOB Sugar 2 skids', '', 2, order, '2026-10-08', line, 'supervisor', 'todo', 0, 0, 1, `create-${id}`);
 };
-const action = ({ kind, actor, at, version, op, hash, businessDate = '2026-10-08', jobId = 'j1' }) => {
+const action = ({ kind, actor, at, version, op, hash, jobId = 'j1' }) => {
   hash ??= createHash('sha256').update(JSON.stringify({ actor, method: 'POST', path: `/api/jobs/${jobId}/${kind}`, key: op, body: { expectedVersion: version } })).digest('hex');
   const previous = { start: 'todo', pause: 'in_progress', resume: 'paused', done: 'in_progress' }[kind];
   const next = { start: 'in_progress', pause: 'paused', resume: 'in_progress', done: 'done' }[kind];
@@ -43,13 +43,16 @@ const action = ({ kind, actor, at, version, op, hash, businessDate = '2026-10-08
       started_at=CASE WHEN ?='start' THEN ? ELSE started_at END,
       completed_at=CASE WHEN ?='done' THEN ? ELSE completed_at END
       WHERE id=? AND version=? AND status=? AND updated_at<=?
-        AND (?<>'start' OR work_date<=?)
+        AND (NOT (? IN ('start','resume')) OR NOT EXISTS (
+          SELECT 1 FROM jobs occupied WHERE occupied.line_id=jobs.line_id
+          AND occupied.status='in_progress' AND occupied.id<>jobs.id
+        ))
         AND EXISTS (SELECT 1 FROM users u JOIN production_lines l ON l.id=jobs.line_id
           WHERE u.id=? AND u.active=1 AND l.active=1
           AND (u.role IN ('manager','supervisor') OR
             (u.role IN ('line_leader','assistant') AND EXISTS
               (SELECT 1 FROM line_members m WHERE m.user_id=u.id AND m.line_id=jobs.line_id))))`)
-      .run(next, at, op, kind, at, kind, at, jobId, version, previous, at, kind, businessDate, actor);
+      .run(next, at, op, kind, at, kind, at, jobId, version, previous, at, kind, actor);
     if (update.changes !== 1) {
       db.exec('ROLLBACK');
       return 'conflict';
@@ -90,6 +93,7 @@ const activeMs = (jobId, now) => one(`SELECT COALESCE(SUM(COALESCE(closed_at,?)-
 
 try {
   db.exec(readFileSync(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0007_single_active_job_per_line.sql', import.meta.url), 'utf8'));
   check('actual migration tables and foreign keys', () => {
     assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(x => x.name),
       ['job_events', 'jobs', 'line_members', 'org_settings', 'production_lines', 'users', 'work_intervals']);
@@ -99,7 +103,7 @@ try {
     assert.equal(one('SELECT timezone FROM org_settings').timezone, 'America/Toronto');
     assert.equal(one('SELECT revision FROM org_settings').revision, 0);
     const indexes = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all().map(x => x.name));
-    for (const name of ['jobs_work_date_day_order', 'work_intervals_one_open_per_job', 'job_events_job_time']) assert.ok(indexes.has(name));
+    for (const name of ['jobs_work_date_day_order', 'work_intervals_one_open_per_job', 'job_events_job_time', 'jobs_one_in_progress_per_line']) assert.ok(indexes.has(name));
   });
   for (const [id, role] of [['manager', 'manager'], ['supervisor', 'supervisor'], ['leader', 'line_leader'], ['assistant', 'assistant'], ['outsider', 'assistant']]) insertUser(id, role);
   db.prepare("INSERT INTO production_lines (id,code,name) VALUES ('line1','CKT2A/B','CKT2A/B')").run();
@@ -119,9 +123,8 @@ try {
     assert.throws(() => db.prepare("UPDATE jobs SET target_skids=0 WHERE id='j1'").run(), /CHECK constraint failed/);
     assert.throws(() => db.prepare("UPDATE jobs SET status='cancelled' WHERE id='j1'").run(), /CHECK constraint failed/);
   });
-  check('future start and unauthorized line leave no changes', () => {
+  check('unauthorized line leaves no changes', () => {
     const before = snapshot();
-    assert.equal(action({ kind: 'start', actor: 'leader', at: 1000, version: 1, op: 'future', businessDate: '2026-10-07' }), 'conflict');
     assert.equal(action({ kind: 'start', actor: 'outsider', at: 1000, version: 1, op: 'outsider' }), 'conflict');
     assert.deepEqual(snapshot(), before);
   });
@@ -189,6 +192,7 @@ try {
     assert.deepEqual(one("SELECT * FROM jobs WHERE id='missing-interval'"), before);
     assert.equal(one("SELECT count(*) AS n FROM job_events WHERE job_id='missing-interval'").n, 0);
     assert.equal(one('SELECT revision FROM org_settings').revision, revision);
+    db.prepare("UPDATE jobs SET status='paused' WHERE id='missing-interval'").run();
   });
   check('bad audit rolls back interval and job update', () => {
     createJob('bad-audit', 'line1', 4);

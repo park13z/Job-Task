@@ -66,13 +66,17 @@ describe("atomicity and permission boundaries", () => {
     } finally { await f.close(); }
   });
 
-  it("does not start future work and prevents revoked membership", async () => {
+  it("allows early start of scheduled work and prevents revoked membership", async () => {
     const f = await createFixture();
     try {
       const future = successSchema(bulkJobsDataSchema).parse(await (await create(f, [j(addDays(businessDate(Date.now()), 10))])).json()).data.jobs[0];
-      expect((await f.request(`/api/jobs/${future.id}/start`, {
+      const earlyStart = await f.request(`/api/jobs/${future.id}/start`, {
         user: "leader", body: { expectedVersion: 1 }, key: crypto.randomUUID(),
-      })).status).toBe(409);
+      });
+      expect(earlyStart.status).toBe(200);
+      expect(successSchema(jobDataSchema).parse(await earlyStart.json()).data.job).toMatchObject({
+        workDate: future.workDate, status: "in_progress",
+      });
       const today = successSchema(bulkJobsDataSchema).parse(await (await create(f, [j(businessDate(Date.now()), 2)])).json()).data.jobs[0];
       const remove = await f.request(`/api/lines/${LINES.ckt1a}/members/00000000-0000-4000-8000-000000000005`, {
         user: "manager", method: "DELETE", body: {},

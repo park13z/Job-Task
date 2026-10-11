@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { type User, type JobAction, type JobInput, editJobInputSchema, type Job } from "../shared/contracts";
 import { requirePlanner } from "./auth";
-import { conflict, forbidden, isConstraint, unavailable } from "./errors";
-import { jobJson, plannerGuard, executorGuard, businessDate } from "./job-projection";
+import { ApiError, conflict, forbidden, isConstraint, unavailable } from "./errors";
+import { jobJson, plannerGuard, executorGuard } from "./job-projection";
 import { findJob } from "./reads";
 import { replay, type Operation } from "./idempotency";
 import { mondayWeekRange } from "../shared/time";
@@ -100,10 +100,26 @@ export async function actOnJob(db: D1Database, actor: User, id: string, action: 
   const operationId = operation.ids[0];
   if (!operationId) throw unavailable();
   const transition = transitions[action];
+  const isStarting = transition.to === "in_progress";
+  const lineBusy = async () => db.prepare(`SELECT title FROM jobs
+    WHERE line_id=? AND status='in_progress' AND id<>? LIMIT 1`)
+    .bind(previous.lineId, id).first<{ title: string }>();
+  const busyConflict = (title: string) => new ApiError(409, "CONFLICT",
+    `This production line is already running "${title}". Pause or Done that job before starting or resuming another.`);
+  // Friendly preflight validation; the guarded UPDATE and unique index below
+  // are authoritative for concurrent requests.
+  if (isStarting) {
+    const busy = await lineBusy();
+    if (busy) throw busyConflict(busy.title);
+  }
+  const lineGuard = isStarting ? `AND NOT EXISTS (
+      SELECT 1 FROM jobs active WHERE active.line_id=jobs.line_id
+      AND active.status='in_progress' AND active.id<>jobs.id
+    )` : "";
   const statements = [db.prepare(`UPDATE jobs SET status=?,updated_at=?,version=version+1,operation_id=?,
     started_at=CASE WHEN ?='start' THEN ? ELSE started_at END,completed_at=CASE WHEN ?='done' THEN ? ELSE completed_at END
-    WHERE id=? AND version=? AND status=? AND ${executorGuard} AND (?!='start' OR work_date<=?)`)
-    .bind(transition.to, at, operationId, action, at, action, at, id, expectedVersion, transition.from, actor.id, action, businessDate(at))];
+    WHERE id=? AND version=? AND status=? AND ${executorGuard} ${lineGuard}`)
+    .bind(transition.to, at, operationId, action, at, action, at, id, expectedVersion, transition.from, actor.id)];
   if (transition.interval === "open") {
     statements.push(db.prepare(`INSERT INTO work_intervals (id,job_id,opened_at,opened_by,open_operation_id)
       SELECT ?,id,?,?,? FROM jobs WHERE id=? AND operation_id=? AND version=? AND ${executorGuard}`)
@@ -114,5 +130,15 @@ export async function actOnJob(db: D1Database, actor: User, id: string, action: 
       .bind(at, actor.id, operationId, id, operationId, expectedVersion + 1, actor.id));
   }
   statements.push(audit(db, { id, actor, operationId, hash: operation.hash, version: expectedVersion + 1, at, event: transition.event, previous, interval: transition.interval }));
-  return (await execute(db, actor, operation, statements))[0];
+  try {
+    return (await execute(db, actor, operation, statements))[0];
+  } catch (error) {
+    // If a competing Start/Resume wins between validation and the batch,
+    // translate the atomic constraint conflict into actionable feedback.
+    if (isStarting && error instanceof ApiError && error.status === 409) {
+      const busy = await lineBusy();
+      if (busy) throw busyConflict(busy.title);
+    }
+    throw error;
+  }
 }

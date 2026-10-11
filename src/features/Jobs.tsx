@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, Clock3, History, Pause, Play, RotateCcw, Target } from "lucide-react";
 import type { Job, JobAction, JobEvent, Line, User } from "../shared/contracts";
 import { availableActions, canActOnJob } from "../shared/workflow";
@@ -13,9 +13,27 @@ const actionIcons = { start: Play, pause: Pause, resume: RotateCcw, done: Check 
 
 export { JobTimes, Status } from "./JobDisplay";
 
-export function Jobs({ jobs, lines, user, businessDate, refresh }: { jobs: Job[]; lines: Line[]; user: User; businessDate: string; refresh: () => Promise<void> }) {
+export function Jobs({ jobs, lines, user, refresh }: { jobs: Job[]; lines: Line[]; user: User; refresh: () => Promise<void> }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [activeLineJobs, setActiveLineJobs] = useState<Record<string, { id: string; title: string }>>({});
+  useEffect(() => {
+    let mounted = true;
+    const fetchOccupiedLines = async () => {
+      try {
+        const result = await api.live();
+        if (!mounted) return;
+        setActiveLineJobs(Object.fromEntries(
+          result.data.inProgress.map(job => [job.lineId, { id: job.id, title: job.title }]),
+        ));
+      } catch {
+        // UI may be out of date or offline; the server + D1 index are authoritative.
+      }
+    };
+    void fetchOccupiedLines();
+    const timer = window.setInterval(() => { void fetchOccupiedLines(); }, 10_000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, [jobs]);
   const [confirm, setConfirm] = useState<Job | null>(null);
   const [timeline, setTimeline] = useState<{ job: Job; events: JobEvent[] } | null>(null);
   const [timelineError, setTimelineError] = useState("");
@@ -57,9 +75,25 @@ export function Jobs({ jobs, lines, user, businessDate, refresh }: { jobs: Job[]
         </div>
         <div className="task-action-row flex flex-wrap items-center gap-2 px-4 py-3 sm:justify-end sm:px-5">
           <Button variant="outline" className="mr-auto" onClick={() => void openTimeline(job)}><History size={16} aria-hidden="true" /> History</Button>
-          {canAct(job) && availableActions(job.status).filter(action => action !== "start" || job.workDate <= businessDate).map(action => {
+          {canAct(job) && availableActions(job.status).map(action => {
             const ActionIcon = actionIcons[action];
-            return <Button key={action} variant={action === "done" ? "danger" : "primary"} className="min-w-[100px] max-sm:flex-1" disabled={busyId === job.id} onClick={() => action === "done" ? setConfirm(job) : void act(job, action)}><ActionIcon size={16} aria-hidden="true" />{busyId === job.id ? "Saving…" : labels[action]}</Button>;
+            const busy = action === "start" || action === "resume"
+              ? jobs.find(other => other.lineId === job.lineId && other.id !== job.id && other.status === "in_progress")
+                ?? activeLineJobs[job.lineId]
+              : undefined;
+            const blocked = busy && busy.id !== job.id;
+            const explanation = blocked
+              ? `This line is already running "${busy.title}". Pause or Done that job first.`
+              : undefined;
+            return <span key={action} className="inline-flex flex-col gap-1" title={explanation}>
+              <Button variant={action === "done" ? "danger" : "primary"}
+                aria-label={blocked ? `${labels[action]} unavailable: ${explanation}` : labels[action]}
+                className="min-w-[100px] max-sm:flex-1" disabled={busyId === job.id || Boolean(blocked)}
+                onClick={() => action === "done" ? setConfirm(job) : void act(job, action)}>
+                <ActionIcon size={16} aria-hidden="true" />{busyId === job.id ? "Saving…" : labels[action]}
+              </Button>
+              {explanation && <span className="max-w-56 text-xs text-destructive" role="status">{explanation}</span>}
+            </span>;
           })}
         </div>
       </article>)}

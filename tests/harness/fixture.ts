@@ -33,11 +33,13 @@ export async function createFixture(options:{seatBudget?:string;empty?:boolean;l
   }));
   try {
     const database=await mf.getD1Database("DB");
-    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql"]){
+    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql","0007_single_active_job_per_line.sql"]){
       const sql=await readFile(new URL(`../../migrations/${file}`,import.meta.url),"utf8");
-      for(const statement of sql.replace(/\r\n/g,"\n").split(/;\s*\n/).map(x=>x.trim()).filter(Boolean)){
-        if(!statement.startsWith("PRAGMA")&&!statement.startsWith("--"))await database.prepare(statement).run();
-        else if(statement.startsWith("--") && statement.includes("CREATE TABLE")) await database.prepare(statement.replace(/^--[^\n]*\n/g,"")).run();
+      for(const raw of sql.replace(/\r\n/g,"\n").split(/;\s*\n/)){
+        // Strip all leading SQL comments before applying migrations, including
+        // the documentation preceding CREATE UNIQUE INDEX in migration 0007.
+        const statement = raw.replace(/^(?:\s*--[^\n]*(?:\n|$))+/g,"").trim();
+        if(statement && !statement.startsWith("PRAGMA")) await database.prepare(statement).run();
       }
     }
     const tokens={} as Record<TestUser,string>;

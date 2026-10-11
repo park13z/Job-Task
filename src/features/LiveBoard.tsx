@@ -12,9 +12,9 @@ type LiveData = Awaited<ReturnType<typeof api.live>>["data"];
 type Lane = "inProgress" | "queued" | "done" | "paused";
 const lanes: { id: Lane; label: string; empty: string; icon: typeof PlayCircle }[] = [
   { id: "done", label: "DONE", empty: "No jobs completed today", icon: CheckCircle2 },
-  { id: "inProgress", label: "In Progressing", empty: "No jobs started today are running", icon: PlayCircle },
-  { id: "paused", label: "Paused Today", empty: "No jobs started today are paused", icon: PauseCircle },
-  { id: "queued", label: "Waiting Queue", empty: "No jobs waiting today", icon: Clock3 },
+  { id: "inProgress", label: "In Progressing", empty: "No jobs currently running", icon: PlayCircle },
+  { id: "paused", label: "Paused", empty: "No jobs currently paused", icon: PauseCircle },
+  { id: "queued", label: "Waiting Queue", empty: "No unstarted jobs due today or earlier", icon: Clock3 },
 ];
 
 
@@ -120,7 +120,7 @@ export function LiveBoard({ lines }: { lines: Line[] }) {
       <div>
         <p className="section-eyebrow">TODAY · AMERICA/TORONTO</p>
         <h2 className="live-board-title">Live Job Board</h2>
-        <p className="section-description">Only today's starts, completions and waiting queue. Past jobs are in Dashboard.</p>
+        <p className="section-description">Unstarted work due today or earlier, all ongoing/paused work, and today's completions. Future unstarted jobs stay in Job.</p>
       </div>
       <div className="live-board-actions">
         <p className="text-sm font-semibold">{data ? formatBusinessDate(data.date) : "Today"}</p>

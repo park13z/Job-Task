@@ -15,6 +15,7 @@ function FieldError({ message, id }: { message?: string; id: string }) { return 
 export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: Line[]; jobs: Job[]; refresh: () => Promise<void> }) {
   const range = mondayWeekRange(week);
   const activeLines = lines.filter(line => line.active);
+  const [selectedWorkDate, setSelectedWorkDate] = useState(range.from);
   const [rows, setRows] = useState<Row[]>([makeRow(range.from, activeLines[0]?.id ?? "")]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
@@ -33,10 +34,10 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
   const [editing, setEditing] = useState<Job | null>(null);
   const [editRow, setEditRow] = useState<Row | null>(null);
   const editPending = useRef<Pending | null>(null);
-  useEffect(() => { setRows([makeRow(range.from, activeLines[0]?.id ?? "")]); setChoices({}); pending.current = null; setErrors({}); }, [range.from]);
+  useEffect(() => { setSelectedWorkDate(range.from); setRows([makeRow(range.from, activeLines[0]?.id ?? "")]); setChoices({}); pending.current = null; setErrors({}); }, [range.from]);
   const days = Array.from({ length: 7 }, (_, i) => addDays(range.from, i));
   const nextOrder = Math.max(0, ...jobs.filter(job => job.workDate >= range.from && job.workDate <= range.to).map(job => job.dayOrder)) + 1;
-  const update = (id: string, field: keyof Row, value: string) => { setRows(current => current.map(row => row.id === id ? { ...row, [field]: value } : row)); setErrors({}); };
+  const update = (id: string, field: keyof Row, value: string) => { if (field === "workDate") setSelectedWorkDate(value); setRows(current => current.map(row => row.id === id ? { ...row, [field]: value } : row)); setErrors({}); };
   const changeLine = (row: Row, edit: boolean, lineId: string) => {
     const selected = templates.find(item => item.id === choices[row.id]);
     const clearSelected = selected !== undefined && !selected.lineIds.includes(lineId);
@@ -76,7 +77,7 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
     setBusy(true); setMessage("");
     try {
       await api.createJobs(parsed.data, pending.current.key);
-      pending.current = null; setRows([makeRow(range.from, activeLines[0]?.id ?? "")]); setChoices({}); setErrors({}); setMessage("Tasks saved successfully"); await refresh();
+      pending.current = null; setRows([makeRow(selectedWorkDate, activeLines[0]?.id ?? "")]); setChoices({}); setErrors({}); setMessage("Tasks saved successfully"); await refresh();
     } catch (error) {
       if (error instanceof ApiError) setErrors(error.fields);
       setMessage(friendlyError(error));
@@ -131,7 +132,7 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
       <div className="space-y-3">{rows.map(row => rowForm(row))}</div>
       <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4">
         <div><p className="text-sm font-bold text-foreground">{rows.length} task {rows.length === 1 ? "row" : "rows"} ready to plan</p><p className="mt-1 text-xs text-muted-foreground">All tasks are saved together when you confirm.</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={rows.length >= 10 || busy} onClick={() => setRows(current => [...current, makeRow(range.from, activeLines[0]?.id ?? "")])}><Plus size={17} aria-hidden="true" /> Add row</Button><Button disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save tasks"}</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={rows.length >= 10 || busy} onClick={() => setRows(current => [...current, makeRow(selectedWorkDate, activeLines[0]?.id ?? "")])}><Plus size={17} aria-hidden="true" /> Add row</Button><Button disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save tasks"}</Button></div>
       </div>
     </>}
     {message && <p role="alert" className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold">{message}</p>}

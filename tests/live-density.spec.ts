@@ -53,7 +53,7 @@ test("Live compresses every row according to screen height, keeps every job, and
   await page.getByRole("button", { name: "Live", exact: true }).click();
   const board = page.locator(".live-board");
   await expect(board.locator("article.live-task")).toHaveCount(8);
-  await expect(page.locator(".live-lane h3")).toHaveText(["DONE", "In Progressing", "Paused Today", "Waiting Queue"]);
+  await expect(page.locator(".live-lane h3")).toHaveText(["DONE", "In Progressing", "Paused", "Waiting Queue"]);
   await expect(page.getByRole("region", { name: "In Progressing" }).locator('[data-animation="canvas-frames"]')).toHaveCount(1);
   await expect(page.locator(".live-progress-track")).toHaveCount(2);
   await expect(page.locator(".live-column-headings").first()).toContainText("End Time");
