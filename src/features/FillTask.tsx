@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { v4 as newUuid } from "uuid";
 import { Plus, Trash2 } from "lucide-react";
 import { bulkJobInputSchema, editJobInputSchema, type Job, type Line, type JobTemplate } from "../shared/contracts";
 import { addDays, mondayWeekRange } from "../shared/time";
@@ -7,7 +8,7 @@ import { friendlyError, operationKey, type Pending } from "../lib/operation";
 import { Button, Dialog, Input, Label, Select, Textarea } from "../components/ui";
 
 type Row = { id: string; workDate: string; lineId: string; title: string; description: string; targetSkids: string };
-const makeRow = (date: string, lineId: string): Row => ({ id: crypto.randomUUID(), workDate: date, lineId, title: "", description: "", targetSkids: "" });
+const makeRow = (date: string, lineId: string): Row => ({ id: newUuid(), workDate: date, lineId, title: "", description: "", targetSkids: "" });
 function formBody(row: Row) { return { workDate: row.workDate, lineId: row.lineId, title: row.title, description: row.description, ...(row.targetSkids ? { targetSkids: Number(row.targetSkids) } : {}) }; }
 function FieldError({ message, id }: { message?: string; id: string }) { return message ? <p id={id} className="mt-1 text-sm text-destructive">{message}</p> : null; }
 

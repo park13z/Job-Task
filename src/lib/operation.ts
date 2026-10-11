@@ -1,9 +1,10 @@
+import { v4 as newUuid } from "uuid";
 import { ApiError } from "./api";
 
 type Pending = { fingerprint: string; key: string };
 export function operationKey(previous: Pending | null, body: unknown): Pending {
   const fingerprint = JSON.stringify(body);
-  return previous?.fingerprint === fingerprint ? previous : { fingerprint, key: crypto.randomUUID() };
+  return previous?.fingerprint === fingerprint ? previous : { fingerprint, key: newUuid() };
 }
 export function friendlyError(error: unknown): string {
   if (error instanceof ApiError) {
