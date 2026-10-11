@@ -137,6 +137,28 @@ test("Live compresses every row according to screen height, keeps every job, and
     await expect(inProgress.locator("article.live-task")).toHaveCount(activeCount);
     await expect(inProgress.locator('[data-animation="canvas-frames"]')).toHaveCount(activeCount === 0 ? 0 : 1);
     if (activeCount > 0) await expect(inProgress.locator('[data-animation="canvas-frames"]')).toHaveAttribute("data-cast-size", "3");
+    // A single short row must not crop a sprite taller than that row.
+    if (activeCount === 1) {
+      const geometry = await inProgress.evaluate(lane => {
+        const tasks = lane.querySelector<HTMLElement>(".live-lane-tasks")!;
+        const track = lane.querySelector<HTMLElement>(".live-worker-track")!;
+        const canvas = track.querySelector<HTMLCanvasElement>("canvas")!;
+        const spriteWidth = parseFloat(getComputedStyle(track).getPropertyValue("--live-frame-width"));
+        return {
+          taskHeight: tasks.getBoundingClientRect().height,
+          trackHeight: track.getBoundingClientRect().height,
+          frameHeight: spriteWidth * 80 / 103,
+          bottomOffset: Math.abs(track.getBoundingClientRect().bottom - tasks.getBoundingClientRect().bottom),
+          laneOverflow: getComputedStyle(lane).overflow,
+          canvasHeight: canvas.getBoundingClientRect().height,
+        };
+      });
+      expect(geometry.frameHeight).toBeGreaterThan(geometry.taskHeight);
+      expect(geometry.trackHeight).toBeGreaterThanOrEqual(geometry.frameHeight - 1);
+      expect(geometry.canvasHeight).toBeGreaterThanOrEqual(geometry.frameHeight - 1);
+      expect(geometry.bottomOffset).toBeLessThanOrEqual(1);
+      expect(geometry.laneOverflow).toBe("visible");
+    }
     await expect(board.locator("article.live-task")).toHaveCount(activeCount);
   }
   allActive = false;

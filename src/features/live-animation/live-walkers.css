@@ -4,8 +4,13 @@
 */
 .live-board .live-worker-track {
   --live-frame-width: 94px;
+  --live-frame-height: 74px;
   position: absolute;
-  inset: 0 2px;
+  /* Anchor feet at the end of the task area. A single row can be shorter
+     than a character: give Canvas its own full-height drawing surface,
+     extending upward without adding or clipping any task rows. */
+  inset: auto 2px 0;
+  height: max(100%, var(--live-frame-height));
   z-index: 10;
   pointer-events: none;
   overflow: visible;
@@ -19,10 +24,10 @@
   pointer-events: none;
 }
 
-.live-board[data-density="compact"] .live-worker-track { --live-frame-width: 73px; }
-.live-board[data-density="dense"] .live-worker-track { --live-frame-width: 56px; }
-.live-board[data-density="ultra"] .live-worker-track { --live-frame-width: 43px; }
+.live-board[data-density="compact"] .live-worker-track { --live-frame-width: 73px; --live-frame-height: 57px; }
+.live-board[data-density="dense"] .live-worker-track { --live-frame-width: 56px; --live-frame-height: 44px; }
+.live-board[data-density="ultra"] .live-worker-track { --live-frame-width: 43px; --live-frame-height: 34px; }
 
 @media (max-width: 700px) {
-  .live-board .live-worker-track { --live-frame-width: 60px; }
+  .live-board .live-worker-track { --live-frame-width: 60px; --live-frame-height: 47px; }
 }

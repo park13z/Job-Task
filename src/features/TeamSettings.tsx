@@ -14,8 +14,10 @@ const heading = (eyebrow: string, title: string, subtitle: string) => <div class
   <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
 </div>;
 
-export function TeamSettings({ lines, refresh, actorId }: { lines: Line[]; refresh: () => Promise<void>; actorId:string }) {
-  const [section, setSection] = useState<TeamSection>("users");
+export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect }: {
+  lines: Line[]; refresh: () => Promise<void>; actorId: string;
+  section: TeamSection; onSectionSelect: (section: TeamSection) => void;
+}) {
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [name, setName] = useState(""); const [username, setUsername] = useState("");
@@ -61,7 +63,7 @@ export function TeamSettings({ lines, refresh, actorId }: { lines: Line[]; refre
     <div><p className="section-eyebrow">MANAGEMENT / SETTINGS</p><h2 className="section-title mt-1">Team Settings</h2><p className="section-description">Choose a section to manage. Each area has its own workspace.</p></div>
     <div className="grid items-start gap-5 lg:grid-cols-[225px_minmax(0,1fr)]">
       <TeamSettingsNavigation selected={section} onSelect={next => {
-        setSection(next);
+        onSectionSelect(next);
         setMessage("");
         setEditingUser(null);
         setEditingLine(null);
