@@ -60,7 +60,8 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
 
 
   return <section className="space-y-5">
-    <div><p className="section-eyebrow">MANAGEMENT / SETTINGS</p><h2 className="section-title mt-1">Team Settings</h2><p className="section-description">Choose a section to manage. Each area has its own workspace.</p></div>
+    <h2 className="sr-only">Workspace settings</h2>
+    <p className="section-description">Choose a section to manage. Each area has its own workspace.</p>
     <div className="grid items-start gap-5 lg:grid-cols-[225px_minmax(0,1fr)]">
       <TeamSettingsNavigation selected={section} onSelect={next => {
         onSectionSelect(next);

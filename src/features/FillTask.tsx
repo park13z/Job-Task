@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { v4 as newUuid } from "uuid";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { bulkJobInputSchema, editJobInputSchema, type Job, type Line, type JobTemplate } from "../shared/contracts";
 import { addDays, mondayWeekRange } from "../shared/time";
 import { api, ApiError } from "../lib/api";
@@ -99,14 +99,14 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
     <div className="form-panel-heading">
       <div className="flex items-center gap-3">
         <span className="task-sequence !h-[36px] !w-[36px] !text-xs">{edit ? editing?.dayOrder : nextOrder + rows.indexOf(row)}</span>
-        <div><p className="text-[10px] font-extrabold tracking-[.1em] text-primary">{edit ? "EDIT PENDING TASK" : "NEW PRODUCTION TASK"}</p><p className="text-xs text-muted-foreground">Set the date and line; weekly sequence is automatic</p></div>
+        <div><p className="text-xs font-extrabold tracking-[.08em] text-primary">{edit ? "EDIT PENDING TASK" : "NEW PRODUCTION TASK"}</p><p className="text-xs text-muted-foreground">Set the date and line; weekly sequence is automatic</p></div>
       </div>
       {!edit && rows.length > 1 && <Button type="button" variant="outline" className="!min-h-[36px] !px-3" onClick={() => setRows(current => current.filter(item => item.id !== row.id))}><Trash2 size={15} aria-hidden="true" /> Remove row</Button>}
     </div>
     <div className="form-panel-body grid gap-4 sm:grid-cols-2 lg:grid-cols-[180px_minmax(0,1fr)_132px]">
       <div><Label htmlFor={row.id + "-date"}>Work date</Label><Select value={row.workDate} onValueChange={value => edit ? setEditRow(current => current && { ...current, workDate: value }) : update(row.id, "workDate", value)} label="Work date" options={days.map(day => ({ value: day, label: day }))} /><FieldError id={row.id + "-date-error"} message={errors[edit ? "workDate" : "items." + rows.indexOf(row) + ".workDate"]} /></div>
       <div><Label htmlFor={row.id + "-line"}>Line</Label><Select value={row.lineId || activeLines[0]?.id || ""} onValueChange={value => changeLine(row, edit, value)} label="Line" options={activeLines.map(line => ({ value: line.id, label: line.code + " · " + line.name }))} /><FieldError id={row.id + "-line-error"} message={errors[edit ? "lineId" : "items." + rows.indexOf(row) + ".lineId"]} /></div>
-      <div><p className="text-xs font-semibold text-muted-foreground">Weekly order</p><p className="mt-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm font-bold">{edit ? "#" + editing?.dayOrder : "#" + (nextOrder + rows.indexOf(row)) + " (preview)"}</p><p className="mt-1 text-[11px] text-muted-foreground">Assigned automatically when saved</p></div>
+      <div><p className="text-xs font-semibold text-muted-foreground">Weekly order</p><p className="mt-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm font-bold">{edit ? "#" + editing?.dayOrder : "#" + (nextOrder + rows.indexOf(row)) + " (preview)"}</p><p className="mt-1 text-xs text-muted-foreground">Assigned automatically when saved</p></div>
       <div className="sm:col-span-2 lg:col-span-3">
         <Label htmlFor={row.id + "-template"}>Choose from Job List (optional)</Label>
         <Select label={"Choose from Job List" + (edit ? " edit" : " row " + String(rows.indexOf(row) + 1))} value={choices[row.id] ?? "manual"}
@@ -124,20 +124,21 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
   </div>;
 
   return <section className="space-y-5">
+    <h2 className="sr-only">Task planning</h2>
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="section-eyebrow">WEEKLY PLANNING</p><h2 className="section-title mt-1">Fill Task</h2><p className="section-description">Plan tasks for the selected week. Task numbers restart at 1 each Monday and continue across all lines.</p></div>
+      <p className="section-description">Plan tasks for the selected week. Task numbers restart at 1 each Monday and continue across all lines.</p>
       <span className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-muted-foreground">Up to 10 tasks per save</span>
     </div>
     {activeLines.length === 0 ? <div className="app-empty-state">No active lines yet. A manager can add lines in Team Settings.</div> : <>
       <div className="space-y-3">{rows.map(row => rowForm(row))}</div>
-      <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4">
+      <div className="surface-card fill-action-bar flex flex-wrap items-center justify-between gap-3 p-4">
         <div><p className="text-sm font-bold text-foreground">{rows.length} task {rows.length === 1 ? "row" : "rows"} ready to plan</p><p className="mt-1 text-xs text-muted-foreground">All tasks are saved together when you confirm.</p></div>
         <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={rows.length >= 10 || busy} onClick={() => setRows(current => [...current, makeRow(selectedWorkDate, activeLines[0]?.id ?? "")])}><Plus size={17} aria-hidden="true" /> Add row</Button><Button disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save tasks"}</Button></div>
       </div>
     </>}
-    {message && <p role="alert" className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold">{message}</p>}
+    {message && <p role="alert" className={"flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-semibold " + (/successfully/i.test(message) ? "border-[#bfe3d6] bg-[#f1faf6] text-[#0c6a50]" : "border-[#e5baba] bg-[#fef7f7] text-destructive")}>{/successfully/i.test(message) ? <CheckCircle2 size={17} aria-hidden="true" /> : <AlertCircle size={17} aria-hidden="true" />}<span>{message}</span></p>}
     <div className="surface-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"><div><p className="section-eyebrow">REVIEW & UPDATE</p><h3 className="mt-1 text-base font-extrabold">Editable tasks</h3></div><span className="rounded-lg bg-muted px-3 py-2 text-xs font-bold text-muted-foreground">{jobs.filter(job => job.status === "todo").length} pending</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"><div><h3 className="text-base font-extrabold">Editable tasks</h3></div><span className="rounded-lg bg-muted px-3 py-2 text-xs font-bold text-muted-foreground">{jobs.filter(job => job.status === "todo").length} pending</span></div>
       {jobs.filter(job => job.status === "todo").length === 0 ? <p className="p-6 text-sm text-muted-foreground">No pending tasks this week</p> : <div className="divide-y divide-border">{jobs.filter(job => job.status === "todo").map(job => <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><div className="task-sequence">{job.dayOrder}</div><div><p className="task-meta">{job.workDate} · {lines.find(line => line.id === job.lineId)?.code}</p><p className="mt-1 text-sm font-semibold">{job.title}</p></div></div><Button variant="outline" onClick={() => openEdit(job)}>Edit task</Button></div>)}</div>}
     </div>
     <Dialog open={editing !== null} onOpenChange={open => { if (!open) { setEditing(null); setEditRow(null); } }} title="Edit pending task">{editRow && <div className="space-y-4">{rowForm(editRow, true)}{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<Button disabled={busy} onClick={() => void saveEdit()}>{busy ? "Saving…" : "Save changes"}</Button></div>}</Dialog>

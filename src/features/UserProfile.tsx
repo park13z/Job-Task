@@ -30,11 +30,8 @@ export function UserProfile({ user, refresh, onChangePassword }: {
   }
 
   return <section className="space-y-5">
-    <div>
-      <p className="section-eyebrow">MY ACCOUNT</p>
-      <h2 className="section-title mt-1">User Profile</h2>
-      <p className="section-description">Manage your display name and password.</p>
-    </div>
+    <h2 className="sr-only">Account details</h2>
+    <p className="section-description">Manage your display name and password.</p>
     <div className="surface-card max-w-2xl space-y-6 p-5 sm:p-6">
       <div className="flex items-center gap-3 border-b border-border pb-4">
         <span className="rounded-xl bg-secondary p-3 text-primary"><UserRound size={24} aria-hidden="true" /></span>

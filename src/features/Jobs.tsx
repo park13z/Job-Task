@@ -6,7 +6,7 @@ import { formatBusinessDate, formatDuration, formatInstant } from "../shared/tim
 import { api, ApiError } from "../lib/api";
 import { friendlyError, operationKey, type Pending } from "../lib/operation";
 import { Button, Dialog } from "../components/ui";
-import { JobTimes, Status } from "./JobDisplay";
+import { JobTimes, OverdueBadge, Status } from "./JobDisplay";
 
 const labels: Record<JobAction, string> = { start: "Start", pause: "Pause", resume: "Resume", done: "Done" };
 const actionIcons = { start: Play, pause: Pause, resume: RotateCcw, done: Check } as const;
@@ -53,52 +53,60 @@ export function Jobs({ jobs, lines, user, refresh }: { jobs: Job[]; lines: Line[
     catch (error) { setTimelineError(friendlyError(error)); }
   };
   return <section className="space-y-5">
+    <h2 className="sr-only">Task queue</h2>
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="section-eyebrow">FLOOR EXECUTION</p><h2 className="section-title mt-1">Job</h2><p className="section-description">Live tasks ordered by date and production sequence</p></div>
+      <p className="section-description hidden sm:block">Tasks ordered by date and production sequence</p>
       <span className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-muted-foreground">{jobs.length} tasks shown</span>
     </div>
     {message && <p role="alert" className="rounded-lg border border-[#e5baba] bg-white p-4 text-sm text-destructive">{message}</p>}
     {jobs.length === 0 ? <div className="app-empty-state"><Clock3 size={26} className="text-[#90a7ad]" /><p>No tasks in the selected period</p></div> : <div className="space-y-3">
-      {jobs.map(job => <article key={job.id} className={"task-card overflow-hidden is-" + (job.status === "in_progress" ? "active" : job.status)}>
-        <div className="px-4 py-4 sm:px-5 sm:py-5">
-          <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
-            <div className="task-sequence" aria-label={"Daily order " + job.dayOrder}>{job.dayOrder}</div>
-            <div className="min-w-0 flex-1"><p className="task-meta">{formatBusinessDate(job.workDate)} <span className="mx-2 text-[#b4c4c9]">/</span>{lines.find(line => line.id === job.lineId)?.code ?? "Line"}</p><h3 className="mt-1.5 text-base font-extrabold leading-snug tracking-tight text-[#1d3845] sm:text-[17px]">{job.title}</h3>{job.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{job.description}</p>}</div>
-            <Status job={job} />
+      {jobs.map(job => {
+        const actions = canAct(job) ? availableActions(job.status) : [];
+        return <article key={job.id} className={"task-card overflow-hidden is-" + (job.status === "in_progress" ? "active" : job.status)}>
+          <div className="md:grid md:grid-cols-[minmax(0,1fr)_184px]">
+            <div className="min-w-0 px-4 py-4 sm:px-5 sm:py-5">
+              <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+                <div className="task-sequence" aria-label={"Daily order " + job.dayOrder}>{job.dayOrder}</div>
+                <div className="min-w-0 flex-1"><p className="task-meta">{formatBusinessDate(job.workDate)} <span className="mx-2 text-[#b4c4c9]">/</span>{lines.find(line => line.id === job.lineId)?.code ?? "Line"}</p><h3 className="mt-1.5 text-base font-extrabold leading-snug tracking-tight text-[#1d3845] sm:text-[17px]">{job.title}</h3>{job.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{job.description}</p>}</div>
+                <Status job={job} />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:ml-[54px]">
+                <span className="inline-flex items-center gap-2 rounded-lg bg-[#ecf5f4] px-3 py-2 text-[13px] font-extrabold text-[#1b7369]"><Clock3 size={16} aria-hidden="true" /> {formatDuration(job.activeMs)} <span className="text-xs font-medium text-[#3f736c]">ACTIVE</span></span>
+                {job.targetSkids !== null && <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#f1f5f6] px-3 py-2 text-xs font-bold text-[#3d5763]"><Target size={15} aria-hidden="true" /> Target {job.targetSkids} skids</span>}
+                {job.overdue && <OverdueBadge />}
+              </div>
+              <div className="mt-4 rounded-lg border border-[#e7edef] bg-[#fafcfc] px-3 py-3 sm:ml-[54px]"><JobTimes job={job} /></div>
+            </div>
+            <div className="task-action-row flex flex-col gap-2 px-4 py-3 sm:px-5 md:px-4 md:py-5">
+              {actions.length > 0 && <div className="flex gap-2 md:flex-col">
+                {actions.map(action => {
+                  const ActionIcon = actionIcons[action];
+                  const busy = action === "start" || action === "resume"
+                    ? jobs.find(other => other.lineId === job.lineId && other.id !== job.id && other.status === "in_progress")
+                      ?? activeLineJobs[job.lineId]
+                    : undefined;
+                  const blocked = busy && busy.id !== job.id;
+                  const explanation = blocked
+                    ? `This line is already running "${busy.title}". Pause or Done that job first.`
+                    : undefined;
+                  return <span key={action} className="flex flex-1 flex-col gap-1.5 md:flex-none" title={explanation}>
+                    <Button variant={action === "done" ? "danger" : "primary"}
+                      aria-label={blocked ? `${labels[action]} unavailable: ${explanation}` : labels[action]}
+                      className="!min-h-[52px] w-full text-[15px]" disabled={busyId === job.id || Boolean(blocked)}
+                      onClick={() => action === "done" ? setConfirm(job) : void act(job, action)}>
+                      <ActionIcon size={18} aria-hidden="true" />{busyId === job.id ? "Saving…" : labels[action]}
+                    </Button>
+                    {explanation && <span className="flex items-start gap-1.5 text-[13px] leading-snug text-[#9a4a00]" role="status"><AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{explanation}</span>}
+                  </span>;
+                })}
+              </div>}
+              <Button variant="outline" className="w-full" onClick={() => void openTimeline(job)}><History size={16} aria-hidden="true" /> History</Button>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:ml-[54px]">
-            <span className="inline-flex items-center gap-2 rounded-lg bg-[#ecf5f4] px-3 py-2 text-[13px] font-extrabold text-[#1b7369]"><Clock3 size={16} aria-hidden="true" /> {formatDuration(job.activeMs)} <span className="text-[10px] font-medium text-[#497e77]">ACTIVE</span></span>
-            {job.targetSkids !== null && <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#f1f5f6] px-3 py-2 text-xs font-bold text-[#3d5763]"><Target size={15} aria-hidden="true" /> Target {job.targetSkids} skids</span>}
-            {job.overdue && <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-destructive"><AlertCircle size={15} aria-hidden="true" /> Overdue</span>}
-          </div>
-          <div className="mt-4 rounded-lg border border-[#e7edef] bg-[#fafcfc] px-3 py-3 sm:ml-[54px]"><JobTimes job={job} /></div>
-        </div>
-        <div className="task-action-row flex flex-wrap items-center gap-2 px-4 py-3 sm:justify-end sm:px-5">
-          <Button variant="outline" className="mr-auto" onClick={() => void openTimeline(job)}><History size={16} aria-hidden="true" /> History</Button>
-          {canAct(job) && availableActions(job.status).map(action => {
-            const ActionIcon = actionIcons[action];
-            const busy = action === "start" || action === "resume"
-              ? jobs.find(other => other.lineId === job.lineId && other.id !== job.id && other.status === "in_progress")
-                ?? activeLineJobs[job.lineId]
-              : undefined;
-            const blocked = busy && busy.id !== job.id;
-            const explanation = blocked
-              ? `This line is already running "${busy.title}". Pause or Done that job first.`
-              : undefined;
-            return <span key={action} className="inline-flex flex-col gap-1" title={explanation}>
-              <Button variant={action === "done" ? "danger" : "primary"}
-                aria-label={blocked ? `${labels[action]} unavailable: ${explanation}` : labels[action]}
-                className="min-w-[100px] max-sm:flex-1" disabled={busyId === job.id || Boolean(blocked)}
-                onClick={() => action === "done" ? setConfirm(job) : void act(job, action)}>
-                <ActionIcon size={16} aria-hidden="true" />{busyId === job.id ? "Saving…" : labels[action]}
-              </Button>
-              {explanation && <span className="max-w-56 text-xs text-destructive" role="status">{explanation}</span>}
-            </span>;
-          })}
-        </div>
-      </article>)}
+        </article>;
+      })}
     </div>}
-    <Dialog open={confirm !== null} onOpenChange={open => { if (!open) setConfirm(null); }} title="Confirm completion">{confirm && <div className="space-y-4"><p>Mark this task as done: “{confirm.title}”?</p><div className="flex gap-2"><Button variant="outline" onClick={() => setConfirm(null)}>Cancel</Button><Button variant="danger" disabled={busyId === confirm.id} onClick={() => void act(confirm, "done")}>Confirm Done</Button></div></div>}</Dialog>
+    <Dialog open={confirm !== null} onOpenChange={open => { if (!open) setConfirm(null); }} title="Confirm completion">{confirm && <div className="space-y-4"><p>Mark this task as done: “{confirm.title}”?</p><div className="flex gap-2"><Button variant="outline" className="!min-h-[52px] flex-1 sm:flex-none" onClick={() => setConfirm(null)}>Cancel</Button><Button variant="danger" className="!min-h-[52px] flex-1 sm:flex-none" disabled={busyId === confirm.id} onClick={() => void act(confirm, "done")}>Confirm Done</Button></div></div>}</Dialog>
     <Dialog open={timeline !== null} onOpenChange={open => { if (!open) setTimeline(null); }} title="Task history">{timeline && <div><p className="mb-3 font-semibold">{timeline.job.title}</p>{timelineError ? <p role="alert">{timelineError}</p> : timeline.events.length === 0 ? <p>Loading history…</p> : <ol className="space-y-3 border-l-2 border-secondary pl-4">{timeline.events.map(event => <li key={event.id} className="text-sm"><strong>{event.eventType}</strong> · {formatInstant(event.happenedAt)}<br /><span className="text-muted-foreground">{event.actor.name}</span></li>)}</ol>}</div>}</Dialog>
   </section>;
 }

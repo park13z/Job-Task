@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 test("manager creates a task; line leader and assistant complete it", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Job Task" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await page.getByRole("button", { name: "Fill Task" }).click();
   await expect(page.getByText("Weekly order").first()).toBeVisible();
   await page.getByLabel("Task", { exact: true }).fill("Pack 8 skids - browser test");
@@ -78,6 +78,7 @@ test("manager and supervisor can operate any active line in the English UI", asy
 test("User Profile replaces sidebar password action and keeps username read-only", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
+  await page.getByRole("button", { name: "More", exact: true }).click();
   await expect(page.getByRole("button", { name: "User Profile" })).toBeVisible();
   await page.getByRole("button", { name: "User Profile" }).click();
   await expect(page.getByRole("heading", { name: "User Profile" })).toBeVisible();
@@ -254,6 +255,7 @@ test("team settings uses separate full-page sections and Job List supports manua
 test("Team Settings sections remain usable and accessible on a 375px phone", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
+  await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByRole("button", { name: "Team Settings" }).click();
   await expect(page.getByRole("heading", { name: "Team Settings" })).toBeVisible();
   await page.getByRole("button", { name: /Line Members/ }).click();
@@ -263,6 +265,25 @@ test("Team Settings sections remain usable and accessible on a 375px phone", asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations.filter(issue => ["serious","critical"].includes(issue.impact ?? ""))).toEqual([]);
+});
+
+test("mobile More menu respects roles and returns focus after Escape", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  for (const role of ["manager", "leader"] as const) {
+    await page.context().addCookies([{ name: "e2e_user", value: role, url: "http://127.0.0.1:4174" }]);
+    await page.goto("/dashboard");
+    const more = page.getByRole("button", { name: "More", exact: true });
+    await more.click();
+    const menu = page.getByRole("dialog", { name: "Workspace menu" });
+    await expect(menu.getByRole("button", { name: "User Profile" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "Team Settings" })).toHaveCount(role === "manager" ? 1 : 0);
+    const result = await new AxeBuilder({ page }).analyze();
+    expect(result.violations.filter(issue => ["serious", "critical"].includes(issue.impact ?? ""))).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(more).toBeFocused();
+  }
 });
 
 test("Job List filters saved jobs to the selected production line", async ({ page }) => {

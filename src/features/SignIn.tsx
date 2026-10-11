@@ -14,7 +14,7 @@ export function SignIn({ onSuccess }: { onSuccess: () => Promise<void> }) {
     catch (error) { setMessage(error instanceof Error ? error.message : "Sign in failed."); }
     finally { setBusy(false); }
   }
-  return <main className="login-page flex min-h-screen items-center justify-center bg-[#f2f6f7] p-5">
+  return <main className="login-page flex min-h-dvh items-center justify-center bg-[#f2f6f7] p-5">
     <div className="w-full max-w-[440px] rounded-2xl border border-border bg-white p-7 shadow-xl sm:p-10">
       <div className="mb-8 flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-xl bg-[#123940] text-white"><Warehouse size={27}/></div>
         <div><h1 className="text-2xl font-extrabold tracking-tight">Job Task</h1><p className="text-xs font-bold tracking-wider text-muted-foreground">PACKHOUSE OPERATIONS</p></div></div>
