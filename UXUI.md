@@ -15,11 +15,13 @@ Owner authorized the remaining layout work after review, while retaining SVG ico
 - Retained: task order, server durations, date formatters, role restrictions, action availability, confirmation and history flows. API, authentication, database and configuration files are outside this change.
 - Accessibility: More uses a Radix dialog trigger for keyboard focus restoration. Supporting headings preserve the heading hierarchy without repeating visible page titles. Live description text uses the existing muted foreground token for readable contrast; character assets and animation code are unchanged.
 - Layout adjustment: complete timestamp labels and dates need more room than the draft's 64px Dashboard row target. Desktop sample rows are about 94px, and longer titles may expand them.
-- Deferred: the remaining global token cleanup, Fill Task sticky actions, further Team Settings/Profile layout changes, clickable KPI filters, a new job sort order, and the week-picker popover. Removing their repeated page titles is included in this follow-up.
+- Implemented (continuation, 2026-10-11): Fill Task action bar (Add row / Save tasks) is sticky at the bottom, above the mobile tab bar on phones; Fill Task success and error messages use distinct tones with icons; the last sub-12px label outside Live (Team Settings navigation hint) is now 12px. Live keeps its spec-defined density sizes.
+- Deferred: further Team Settings/Profile layout changes, clickable KPI filters (new behavior, needs owner approval), a new job sort order (contract), and the week-picker popover. Removing their repeated page titles is included in the earlier follow-up.
 - Handoff: owner stopped further development and authorized a local commit on `main`. This checkpoint includes the existing Claude UI changes and the completed follow-up above. No push or deployment was authorized or performed.
 
 ### Local validation and next-client handoff
 
+- PASS (rerun after the Fill Task, Status chip, Job action rail and token follow-up): `npm run check` end to end. typecheck, animation check, build, 14 schema checks, 40/40 unit tests (14 files) and 26/26 Playwright tests, including the mobile More-menu focus test and the axe checks. This supersedes the earlier single unit-test transport failure, which did not recur. Not covered: screenshots at 1920x1080, 1366x768 and 375x812, native browser zoom, a screen reader, production behavior.
 - PASS: final `npm run typecheck` and `npm run build` after the last source edits; `git diff --check`.
 - PASS: animation checks and 14 local schema checks during `npm run check`.
 - FAIL: that full check stopped in the unit suite with 39/40 tests passing. One security test failed with an Undici/Miniflare `fetch failed` / `bad port` transport error. The focused retry, `npm run test:unit -- tests/security.test.ts`, passed all 7 tests. The full check has not been rerun, so the checkpoint does not claim a complete passing suite.

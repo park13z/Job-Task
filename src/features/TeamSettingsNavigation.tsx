@@ -21,7 +21,7 @@ export function TeamSettingsNavigation({
     {teamSections.map(item => <Button key={item.id} variant="ghost" aria-current={selected === item.id ? "page" : undefined}
       className={"!min-h-[58px] shrink-0 !justify-start !px-3 text-left lg:w-full " + (selected === item.id ? "!bg-[#e7f4f0] !text-[#0a6c5f]" : "!text-[#526976]")}
       onClick={() => onSelect(item.id)}>
-      <item.icon size={19} aria-hidden="true"/><span className="flex min-w-0 flex-col items-start gap-1"><strong className="text-xs sm:text-sm">{item.name}</strong><small className="hidden text-[11px] font-normal opacity-80 lg:block">{item.description}</small></span>
+      <item.icon size={19} aria-hidden="true"/><span className="flex min-w-0 flex-col items-start gap-1"><strong className="text-xs sm:text-sm">{item.name}</strong><small className="hidden text-xs font-normal opacity-80 lg:block">{item.description}</small></span>
       {selected === item.id && <ChevronRight className="ml-auto hidden lg:block" size={16}/>}
     </Button>)}
   </nav>;

@@ -104,6 +104,8 @@ button { cursor: pointer; }
 .dash-row.is-active { border-left-color: #158577; background: #f3fbf8; }
 .dash-row.is-paused { border-left-color: #c09034; background: #fffbf2; }
 .dash-row.is-done { border-left-color: #a12b2b; background: #fef9f9; }
+.fill-action-bar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 15; box-shadow: 0 -6px 18px rgba(20, 48, 59, .08); }
+@media(min-width: 1024px) { .fill-action-bar { bottom: 12px; } }
 .date-group { position: sticky; top: var(--dashboard-date-top, 0px); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--muted); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 8px 16px; font-size: 13px; font-weight: 800; color: #294954; }
 .form-panel { background: #fff; border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 4px 18px rgba(25,54,61,.025); }
 .form-panel-heading { border-bottom: 1px solid #e8edef; padding: 17px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
