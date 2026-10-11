@@ -2,7 +2,7 @@
 
 **A line-based production job planner and real-time operations wallboard.**
 
-Job Task is a web app designed for packhouses and production teams. Plan work for the week, start and pause tasks on a production line, record completion, and display today's workload on a full-screen Live Board. The application can be adapted to other team-based workflows.
+Job Task is a web app designed for packhouses and production teams. Plan work for the week, start and pause tasks on a production line, record completion, and display active work and due tasks on a full-screen Live Board. The application can be adapted to other team-based workflows.
 
 **Built with:** React, TypeScript, Vite, Tailwind CSS, Hono, Cloudflare Pages/Workers, and Cloudflare D1 (SQLite).
 
@@ -10,13 +10,43 @@ Job Task is a web app designed for packhouses and production teams. Plan work fo
 
 - **Weekly planning:** Create tasks for a production line and date, with optional descriptions and skid targets. The server assigns weekly sequence numbers across all lines (Monday–Sunday, `America/Toronto`).
 - **Execution workflow:** Waiting → In Progress → Paused → In Progress → Done. The server records timestamps; active work time excludes paused intervals.
-- **Live wallboard:** Shows only today's Waiting Queue, In Progressing, Paused Today, and Done jobs. Includes full-screen mode, adaptive row density, distinct status colors, and small animated walking workers.
-- **Dashboard and history:** Review tasks, dates, statuses, and work time beyond today's Live display.
+- **One active job per line:** A production line may have multiple queued or paused jobs, but only one job can be **In Progress** on that line at a time. Other lines work independently.
+- **Live wallboard:** Shows due/overdue Waiting Queue jobs, all currently In Progress or Paused jobs (even from earlier dates), and jobs completed today. Includes full-screen mode, adaptive row density, distinct status colors, and animated walking workers.
+- **Dashboard and history:** Review tasks, dates, statuses, and work time beyond the Live display.
 - **Role and line controls:** Manager, Supervisor, Line Leader, and Assistant access with line membership rules.
 - **Reusable job names:** Managers maintain the Job List; planners can select or enter their own task titles.
 - **User profile:** Users can update their display name and password.
 
 The Live progress animation means **a task is active**. It is *not* a calculated completion percentage or a machine integration.
+
+## Working on a production line
+
+1. **Plan:** In **Fill Task**, select a work date and production line, then save one or more jobs. Multiple **Waiting** jobs can be assigned to the same line. Work scheduled for a future date may be started early.
+2. **Start:** On the **Job** screen, press **Start** for a waiting job. It becomes **In Progress** and occupies its assigned production line. Only **one In Progress job per line** is allowed across *all dates and weeks*, not just the week currently shown.
+3. **Line already occupied:** If another job on that line is running, **Start** or **Resume** is disabled and the screen identifies the running job. The API also rejects competing attempts with HTTP `409 CONFLICT`; the restriction is not just a visual warning.
+4. **Pause:** Press **Pause** to stop recording active work time and release the line. Another queued job on the same line may now start.
+5. **Resume:** A paused job can resume only when its line has no other In Progress job. If another job took the line, pause or complete that job first.
+6. **Done:** Confirm **Done** to finish the running job and release the line. Completed work remains available in **Dashboard/history**; a Done job cannot be resumed.
+
+**Example:** Line A can queue Jobs 101 and 102, but cannot run both at once. While Job 101 is In Progress, Job 102 must wait. Pausing or completing Job 101 frees Line A for Job 102. Meanwhile, Line B can run a job at the same time as Line A.
+
+**Live Board visibility:** In Progress and Paused jobs remain visible regardless of their scheduled date; Waiting jobs appear when their work date is today or overdue; Done shows jobs completed today (Toronto time). A future Waiting job does not appear on Live until due, although it can be started early from the Job screen.
+
+### Database protection for one running job per line
+
+The application checks line occupancy in the API and uses `migrations/0007_single_active_job_per_line.sql` to establish a unique D1/SQLite index for atomic protection against simultaneous Start/Resume requests. The index applies only to jobs with `status='in_progress'`; Waiting, Paused, and Done jobs do not occupy a line.
+
+For an **existing database**, check for conflicting running jobs before applying migration 0007:
+
+```sql
+SELECT line_id, COUNT(*) AS running_jobs
+FROM jobs
+WHERE status = 'in_progress'
+GROUP BY line_id
+HAVING COUNT(*) > 1;
+```
+
+If this query returns any rows, review and resolve those jobs through the normal workflow before applying the migration. The migration **fails intentionally** when duplicates exist; it does not change their statuses or remove data. New installations should apply all migrations in numerical order; migration 0007 is **not** automatically applied to an existing live database by updating the code.
 
 ## Screens
 
@@ -25,7 +55,7 @@ The Live progress animation means **a task is active**. It is *not* a calculated
 | Dashboard | Weekly summary and history |
 | Fill Task | Plan new tasks |
 | Job | Start, Pause, Resume, and Done actions |
-| Live | Today's full-screen production board |
+| Live | Full-screen view of active/paused work, due or overdue queue, and today's completions |
 | Team Settings | Users, lines, memberships, and Job List |
 | User Profile | Update display name and password |
 
@@ -101,4 +131,4 @@ The source code is free to use, modify, and redistribute under the [MIT License]
 
 ---
 
-**ภาษาไทย:** Job Task เป็นเว็บแอปวางแผนงานไลน์ผลิต ติดตาม Start/Pause/Resume/Done และแสดงงานวันนี้บนหน้า Live แบบเต็มจอ สำหรับผู้สนใจนำแนวทางไปต่อยอด โปรดใช้ Cloudflare/D1 และข้อมูลผู้ใช้ของตนเอง ไม่ใช้การตั้งค่าระบบ Production ของผู้พัฒนา
+**ภาษาไทย:** Job Task เป็นเว็บแอปวางแผนงานไลน์ผลิต ติดตาม Start/Pause/Resume/Done และแสดงงานที่กำลังทำ งานหยุดพัก งานรอคิวที่ถึงกำหนด และงานที่เสร็จวันนี้บนหน้า Live แบบเต็มจอ **แต่ละไลน์มีงาน In Progress ได้เพียง 1 งานในเวลาเดียวกัน** เมื่อ Pause หรือ Done จะเปิดให้เริ่มงานถัดไปในไลน์นั้นได้ ส่วนไลน์อื่นทำงานพร้อมกันได้ตามปกติ สำหรับผู้สนใจนำแนวทางไปต่อยอด โปรดใช้ Cloudflare/D1 และข้อมูลผู้ใช้ของตนเอง ไม่ใช้การตั้งค่าระบบ Production ของผู้พัฒนา
