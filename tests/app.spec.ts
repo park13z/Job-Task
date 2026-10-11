@@ -12,16 +12,37 @@ test("manager creates a task; line leader and assistant complete it", async ({ p
   await page.context().addCookies([{ name: "e2e_user", value: "leader", url: new URL(page.url()).origin }]);
   await page.reload();
   await page.getByRole("button", { name: "Job", exact: true }).click();
-  await expect(page.getByText("Pack 8 skids - browser test")).toBeVisible();
-  await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  const task = page.locator("article.task-card").filter({ hasText: "Pack 8 skids - browser test" });
+  await expect(task).toHaveCount(1);
+  await expect(task.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
+  await task.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(task.locator("span.rounded-full")).toHaveText("In progress");
+  await expect(task.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  await task.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(task.locator("span.rounded-full")).toHaveText("Paused");
+  await expect(task.getByRole("button", { name: "Resume", exact: true })).toBeEnabled();
+  await expect(task.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
+  // Reload before resuming to ensure the pause really reached the D1 backend.
+  await page.reload();
+  await page.getByRole("button", { name: "Job", exact: true }).click();
+  await expect(task.locator("span.rounded-full")).toHaveText("Paused");
   await page.context().addCookies([{ name: "e2e_user", value: "assistant", url: new URL(page.url()).origin }]);
   await page.reload();
   await page.getByRole("button", { name: "Job", exact: true }).click();
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm Done" }).click();
-  await expect(page.getByText("Done", { exact: true })).toBeVisible();
+  await task.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(task.locator("span.rounded-full")).toHaveText("In progress");
+  await expect(task.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  await task.getByRole("button", { name: "Done", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Confirm completion" });
+  await expect(dialog).toBeVisible();
+  await expect(task.locator("span.rounded-full")).toHaveText("In progress");
+  await dialog.getByRole("button", { name: "Confirm Done" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(task.locator("span.rounded-full")).toHaveText("Done");
+  await expect(task.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "Job", exact: true }).click();
+  await expect(task.locator("span.rounded-full")).toHaveText("Done");
 });
 
 test("manager dashboard meets automated accessibility checks on mobile", async ({ page }) => {
