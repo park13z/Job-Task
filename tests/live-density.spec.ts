@@ -23,6 +23,7 @@ test("Live compresses every row according to screen height, keeps every job, and
       description: "",
       targetSkids: 8,
       dayOrder: i + 1,
+      queuePosition: i + 1, insertedNumber: null, cancelledAt: null,
       workDate: today,
       lineId, createdBy: me.data.user.id,
       version: started ? 2 : 1,

@@ -61,8 +61,8 @@ export function Jobs({ jobs, lines, user, refresh }: { jobs: Job[]; lines: Line[
     {message && <p role="alert" className="rounded-lg border border-[#e5baba] bg-white p-4 text-sm text-destructive">{message}</p>}
     {jobs.length === 0 ? <div className="app-empty-state"><Clock3 size={26} className="text-[#90a7ad]" /><p>No tasks in the selected period</p></div> : <div className="space-y-3">
       {jobs.map(job => {
-        const actions = canAct(job) ? availableActions(job.status) : [];
-        return <article key={job.id} className={"task-card overflow-hidden is-" + (job.status === "in_progress" ? "active" : job.status)}>
+        const actions = canAct(job) && job.cancelledAt === null ? availableActions(job.status) : [];
+        return <article key={job.id} className={"task-card overflow-hidden " + (job.cancelledAt !== null ? "bg-slate-200 opacity-75 " : "") + "is-" + (job.status === "in_progress" ? "active" : job.status)}>
           <div className="md:grid md:grid-cols-[minmax(0,1fr)_184px]">
             <div className="min-w-0 px-4 py-4 sm:px-5 sm:py-5">
               <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">

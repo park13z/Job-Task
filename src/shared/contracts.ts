@@ -38,6 +38,9 @@ const jobBaseSchema = z.strictObject({
   description: z.string().max(2000),
   targetSkids: z.int().positive().nullable(),
   dayOrder: z.int().positive(),
+  queuePosition: z.int().min(0),
+  insertedNumber: z.int().positive().nullable(),
+  cancelledAt: instantSchema.nullable(),
   workDate: businessDateSchema,
   lineId: uuidSchema,
   createdBy: uuidSchema,
@@ -95,10 +98,6 @@ export const jobSchema = z.discriminatedUnion("status", [
   if (job.status === "done" && (job.completedAt < job.startedAt || job.completedAt !== job.updatedAt)) {
     context.addIssue({ code: "custom", path: ["completedAt"], message: "Completion is outside work history" });
   }
-  if (job.status === "done" && job.lastPausedAt !== null &&
-      (job.lastResumedAt === null || job.lastResumedAt < job.lastPausedAt)) {
-    context.addIssue({ code: "custom", message: "Completion must follow a resume after the latest pause" });
-  }
 });
 
 export const jobEventSchema = z.strictObject({
@@ -132,6 +131,20 @@ export const editJobInputSchema = z.strictObject({
   lineId: uuidSchema.optional(),
 }).refine((value) => Object.keys(value).length > 1, "At least one edit is required");
 export const actionInputSchema = z.strictObject({ expectedVersion: versionSchema });
+export const queueReasonSchema = z.string().trim().min(1).max(2000);
+export const queueChangeSchema = z.strictObject({
+  expectedRevision: revisionSchema, reason: queueReasonSchema,
+});
+export const queueInsertSchema = queueChangeSchema.extend({
+  job: jobInputSchema.omit({ dayOrder: true }),
+  aboveQueue: z.int().positive(),
+});
+export const queueReorderSchema = queueChangeSchema.extend({
+  workDate: businessDateSchema, lineId: uuidSchema,
+  ids: z.array(uuidSchema).min(1).max(500).refine(ids => new Set(ids).size === ids.length, "Duplicate queue job"),
+});
+export const queueJobChangeSchema = queueChangeSchema.extend({ expectedVersion: versionSchema });
+export const queueActionSchema = z.enum(["delete","cancel","recall"]);
 export const idempotencyKeySchema = uuidSchema;
 
 export const createUserInputSchema = z.strictObject({

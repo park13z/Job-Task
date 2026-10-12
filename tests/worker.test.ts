@@ -38,16 +38,15 @@ describe("Job Task Worker integration (local D1 + session)", () => {
       const paused = await perform("pause", "assistant", 2);
       expect(paused.status).toBe(200);
       expect(successSchema(jobDataSchema).parse(await paused.json()).data.job.status).toBe("paused");
-      expect((await perform("done", "assistant", 3)).status).toBe(409);
-      expect((await perform("resume", "leader", 3)).status).toBe(200);
-      const done = await perform("done", "assistant", 4);
+      const done = await perform("done", "assistant", 3);
+      expect((await perform("resume", "leader", 4)).status).toBe(409);
       expect(done.status).toBe(200);
       const finished = successSchema(jobDataSchema).parse(await done.json()).data.job;
       expect(finished.status).toBe("done");
       expect(finished.activeMs).toBeGreaterThanOrEqual(0);
       const history = await f.request("/api/jobs/" + first.id + "/events", { user: "leader" });
       expect(successSchema(eventsDataSchema).parse(await history.json()).data.events.map((event: { eventType: string }) => event.eventType))
-        .toEqual(["created", "started", "paused", "resumed", "completed"]);
+        .toEqual(["created", "started", "paused", "completed"]);
     } finally { await f.close(); }
   });
 

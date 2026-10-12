@@ -9,11 +9,11 @@ export async function liveJobs(db: D1Database, actor: User, at: number) {
   const { start, end } = torontoDayRange(date);
   const result = await db.prepare(`SELECT ${jobJson(at)} AS json FROM jobs j
     WHERE ${readPermission} AND (
-      (j.status='todo' AND j.work_date<=?)
+      (j.status='todo' AND j.cancelled_at IS NULL AND j.work_date<=?)
       OR j.status IN ('in_progress','paused')
       OR (j.status='done' AND j.completed_at>=? AND j.completed_at<?)
     )
-    ORDER BY j.work_date,j.day_order,j.line_id,j.id`)
+    ORDER BY j.work_date,j.line_id,j.queue_position,j.day_order,j.id`)
     .bind(actor.id, date, start, end).all<unknown>();
   const jobs = result.results.map(parseJobRow);
   return {

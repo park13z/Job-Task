@@ -3,7 +3,7 @@ import type { Job, JobAction, JobStatus, Line, Role, User } from "./contracts";
 export const transitionMap = {
   todo: { start: "in_progress" },
   in_progress: { pause: "paused", done: "done" },
-  paused: { resume: "in_progress" },
+  paused: { resume: "in_progress", done: "done" },
   done: {},
 } as const satisfies Record<JobStatus, Partial<Record<JobAction, JobStatus>>>;
 
@@ -11,7 +11,7 @@ export function availableActions(status: JobStatus): JobAction[] {
   switch (status) {
     case "todo": return ["start"];
     case "in_progress": return ["pause", "done"];
-    case "paused": return ["resume"];
+    case "paused": return ["resume","done"];
     case "done": return [];
     default: {
       const exhaustive: never = status;
@@ -24,7 +24,7 @@ export function nextStatus(status: JobStatus, action: JobAction): JobStatus | nu
   switch (status) {
     case "todo": return action === "start" ? transitionMap.todo.start : null;
     case "in_progress": return action === "pause" ? transitionMap.in_progress.pause : action === "done" ? transitionMap.in_progress.done : null;
-    case "paused": return action === "resume" ? transitionMap.paused.resume : null;
+    case "paused": return action === "resume" ? transitionMap.paused.resume : action === "done" ? transitionMap.paused.done : null;
     case "done": return null;
     default: {
       const exhaustive: never = status;

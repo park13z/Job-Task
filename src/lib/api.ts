@@ -54,6 +54,10 @@ export const api = {
   mutate: <T extends z.ZodType>(path: string, method: "POST" | "PATCH" | "PUT" | "DELETE", body: unknown, schema: T, key?: string) =>
     request(path, schema, { method, headers: { "Content-Type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) }, body: JSON.stringify(body) }),
   createJobs: (body: unknown, key: string) => api.mutate("/jobs", "POST", body, bulkJobsDataSchema, key),
+  insertQueue: (body: unknown,key:string) => api.mutate("/queue/insert","POST",body,jobDataSchema,key),
+  reorderQueue: (body: unknown,key:string) => api.mutate("/queue/reorder","POST",body,emptyDataSchema,key),
+  queueJobAction: (id:string,action:"delete"|"cancel"|"recall",body:unknown,key:string) =>
+    api.mutate(`/queue/${id}/${action}`,"POST",body,emptyDataSchema,key),
   editJob: (id: string, body: unknown, key: string) => api.mutate(`/jobs/${id}`, "PATCH", body, jobDataSchema, key),
   action: (id: string, action: string, body: unknown, key: string) => api.mutate(`/jobs/${id}/${action}`, "POST", body, jobDataSchema, key),
   createUser: (body: unknown) => api.mutate("/users", "POST", body, userDataSchema),

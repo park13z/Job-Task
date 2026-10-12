@@ -94,16 +94,17 @@ const activeMs = (jobId, now) => one(`SELECT COALESCE(SUM(COALESCE(closed_at,?)-
 try {
   db.exec(readFileSync(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../migrations/0007_single_active_job_per_line.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0008_queue_management.sql', import.meta.url), 'utf8'));
   check('actual migration tables and foreign keys', () => {
     assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(x => x.name),
-      ['job_events', 'jobs', 'line_members', 'org_settings', 'production_lines', 'users', 'work_intervals']);
+      ['job_events', 'jobs', 'line_members', 'org_settings', 'production_lines', 'queue_actions', 'users', 'work_intervals']);
     assert.equal(one('PRAGMA foreign_keys').foreign_keys, 1);
   });
   check('Toronto settings and indexes', () => {
     assert.equal(one('SELECT timezone FROM org_settings').timezone, 'America/Toronto');
     assert.equal(one('SELECT revision FROM org_settings').revision, 0);
     const indexes = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all().map(x => x.name));
-    for (const name of ['jobs_work_date_day_order', 'work_intervals_one_open_per_job', 'job_events_job_time', 'jobs_one_in_progress_per_line']) assert.ok(indexes.has(name));
+    for (const name of ['jobs_work_date_day_order', 'work_intervals_one_open_per_job', 'job_events_job_time', 'jobs_one_in_progress_per_line', 'jobs_queue_lookup', 'queue_actions_date']) assert.ok(indexes.has(name));
   });
   for (const [id, role] of [['manager', 'manager'], ['supervisor', 'supervisor'], ['leader', 'line_leader'], ['assistant', 'assistant'], ['outsider', 'assistant']]) insertUser(id, role);
   db.prepare("INSERT INTO production_lines (id,code,name) VALUES ('line1','CKT2A/B','CKT2A/B')").run();

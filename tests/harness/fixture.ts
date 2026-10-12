@@ -33,7 +33,7 @@ export async function createFixture(options:{seatBudget?:string;empty?:boolean;l
   }));
   try {
     const database=await mf.getD1Database("DB");
-    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql","0007_single_active_job_per_line.sql"]){
+    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql","0007_single_active_job_per_line.sql","0008_queue_management.sql"]){
       const sql=await readFile(new URL(`../../migrations/${file}`,import.meta.url),"utf8");
       for(const raw of sql.replace(/\r\n/g,"\n").split(/;\s*\n/)){
         // Strip all leading SQL comments before applying migrations, including

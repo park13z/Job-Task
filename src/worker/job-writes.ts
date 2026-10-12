@@ -56,10 +56,10 @@ export async function createJobs(db: D1Database, actor: User, items: JobInput[],
     const id = crypto.randomUUID();
     const week = mondayWeekRange(item.workDate);
     // D1 batch inserts are sequential: allocate the next unused weekly number on the server.
-    statements.push(db.prepare(`INSERT INTO jobs (id,title,description,target_skids,day_order,work_date,line_id,created_by,created_at,updated_at,operation_id)
-      SELECT ?,?,?,?,(SELECT COALESCE(MAX(day_order),0)+1 FROM jobs WHERE work_date BETWEEN ? AND ?),?,?,?,?,?,?
+    statements.push(db.prepare(`INSERT INTO jobs (id,title,description,target_skids,day_order,queue_position,work_date,line_id,created_by,created_at,updated_at,operation_id)
+      SELECT ?,?,?,?,(SELECT COALESCE(MAX(day_order),0)+1 FROM jobs WHERE work_date BETWEEN ? AND ?),(SELECT COALESCE(MAX(queue_position),0)+1 FROM jobs WHERE work_date=? AND line_id=?),?,?,?,?,?,?
       WHERE ${plannerGuard} AND EXISTS (SELECT 1 FROM production_lines WHERE id=? AND active=1)`)
-      .bind(id, item.title, item.description ?? "", item.targetSkids ?? null, week.from, week.to,
+      .bind(id, item.title, item.description ?? "", item.targetSkids ?? null, week.from, week.to, item.workDate, item.lineId,
         item.workDate, item.lineId, actor.id, at, at, operationId, actor.id, item.lineId));
     statements.push(audit(db, { id, actor, operationId, hash: operation.hash, version: 1, at, event: "created", previous: null }));
   }
@@ -76,14 +76,17 @@ export async function editJob(db: D1Database, actor: User, id: string, edit: z.i
   const next = { ...previous, ...edit };
   const destination = mondayWeekRange(next.workDate);
   const movedWeek = destination.from !== mondayWeekRange(previous.workDate).from;
+  const movedQueue = next.workDate !== previous.workDate || next.lineId !== previous.lineId;
   const statements = [db.prepare(`UPDATE jobs SET title=?,description=?,target_skids=?,
     day_order=CASE WHEN ?=1 OR EXISTS (SELECT 1 FROM jobs collision WHERE collision.work_date=? AND collision.day_order=jobs.day_order AND collision.id<>jobs.id)
       THEN (SELECT COALESCE(MAX(day_order),0)+1 FROM jobs WHERE work_date BETWEEN ? AND ?) ELSE day_order END,
+    queue_position=CASE WHEN ?=1 THEN (SELECT COALESCE(MAX(queue_position),0)+1 FROM jobs WHERE work_date=? AND line_id=?) ELSE queue_position END,
     work_date=?,line_id=?,updated_at=?,version=version+1,operation_id=?
-    WHERE id=? AND version=? AND status='todo' AND ${plannerGuard}
+    WHERE id=? AND version=? AND status='todo' AND cancelled_at IS NULL AND ${plannerGuard}
     AND EXISTS (SELECT 1 FROM production_lines WHERE id=? AND active=1)`)
     .bind(next.title, next.description, next.targetSkids,
-      movedWeek ? 1 : 0, next.workDate, destination.from, destination.to, next.workDate, next.lineId,
+      movedWeek ? 1 : 0, next.workDate, destination.from, destination.to,
+      movedQueue ? 1 : 0, next.workDate, next.lineId, next.workDate, next.lineId,
       at, operationId, id, edit.expectedVersion, actor.id, next.lineId),
     audit(db, { id, actor, operationId, hash: operation.hash, version: edit.expectedVersion + 1, at, event: "edited", previous }),
   ];
@@ -100,6 +103,7 @@ export async function actOnJob(db: D1Database, actor: User, id: string, action: 
   const operationId = operation.ids[0];
   if (!operationId) throw unavailable();
   const transition = transitions[action];
+  const doneFromPaused = action === "done" && previous.status === "paused";
   const isStarting = transition.to === "in_progress";
   const lineBusy = async () => db.prepare(`SELECT title FROM jobs
     WHERE line_id=? AND status='in_progress' AND id<>? LIMIT 1`)
@@ -118,18 +122,18 @@ export async function actOnJob(db: D1Database, actor: User, id: string, action: 
     )` : "";
   const statements = [db.prepare(`UPDATE jobs SET status=?,updated_at=?,version=version+1,operation_id=?,
     started_at=CASE WHEN ?='start' THEN ? ELSE started_at END,completed_at=CASE WHEN ?='done' THEN ? ELSE completed_at END
-    WHERE id=? AND version=? AND status=? AND ${executorGuard} ${lineGuard}`)
-    .bind(transition.to, at, operationId, action, at, action, at, id, expectedVersion, transition.from, actor.id)];
+    WHERE id=? AND version=? AND status=? AND cancelled_at IS NULL AND ${executorGuard} ${lineGuard}`)
+    .bind(transition.to, at, operationId, action, at, action, at, id, expectedVersion, doneFromPaused ? "paused" : transition.from, actor.id)];
   if (transition.interval === "open") {
     statements.push(db.prepare(`INSERT INTO work_intervals (id,job_id,opened_at,opened_by,open_operation_id)
       SELECT ?,id,?,?,? FROM jobs WHERE id=? AND operation_id=? AND version=? AND ${executorGuard}`)
       .bind(crypto.randomUUID(), at, actor.id, operationId, id, operationId, expectedVersion + 1, actor.id));
-  } else {
+  } else if (!doneFromPaused) {
     statements.push(db.prepare(`UPDATE work_intervals SET closed_at=?,closed_by=?,close_operation_id=? WHERE job_id=? AND closed_at IS NULL
       AND EXISTS (SELECT 1 FROM jobs WHERE jobs.id=work_intervals.job_id AND operation_id=? AND version=? AND ${executorGuard})`)
       .bind(at, actor.id, operationId, id, operationId, expectedVersion + 1, actor.id));
   }
-  statements.push(audit(db, { id, actor, operationId, hash: operation.hash, version: expectedVersion + 1, at, event: transition.event, previous, interval: transition.interval }));
+  statements.push(audit(db, { id, actor, operationId, hash: operation.hash, version: expectedVersion + 1, at, event: transition.event, previous, interval: doneFromPaused ? undefined : transition.interval }));
   try {
     return (await execute(db, actor, operation, statements))[0];
   } catch (error) {

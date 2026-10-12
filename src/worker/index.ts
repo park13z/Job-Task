@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import {
-  actionInputSchema, actionSchema, bulkJobInputSchema, createLineInputSchema,
+  actionInputSchema, actionSchema, bulkJobInputSchema, queueInsertSchema, queueReorderSchema, queueJobChangeSchema, queueActionSchema, createLineInputSchema,
   createUserInputSchema, editJobInputSchema, editLineInputSchema, editUserInputSchema,
   jobDataSchema, bulkJobsDataSchema, jobsDataSchema, jobQuerySchema, summaryQuerySchema,
   summaryDataSchema, liveDataSchema, meDataSchema, linesDataSchema, lineDataSchema, usersDataSchema,
@@ -16,6 +16,7 @@ import { businessDate } from "./job-projection";
 import { queryJobs, summary } from "./job-queries";
 import { liveJobs } from "./live-queries";
 import { createJobs, editJob, actOnJob } from "./job-writes";
+import { insertQueue, reorderQueue, changeQueueJob } from "./queue-writes";
 import { revision, users, lines, events, findUser } from "./reads";
 import { createUser, updateUser, updateOwnName, deleteTemporaryUser, createLine, updateLine, changeMember } from "./roster-writes";
 import { jobTemplates, createJobTemplate, updateJobTemplate } from "./job-templates";
@@ -144,6 +145,24 @@ app.post("/api/jobs", async c => {
   const data = await body(c, bulkJobInputSchema);
   const op = await operation(c.req.raw, c.get("actor"), data, data.items.length);
   return respond(c, bulkJobsDataSchema, { jobs: await createJobs(c.env.DB, c.get("actor"), data.items, op, c.get("at")) }, 201);
+});
+app.post("/api/queue/insert", async c => {
+  const data = await body(c, queueInsertSchema);
+  const op = await operation(c.req.raw, c.get("actor"), data);
+  return respond(c, jobDataSchema, {job: await insertQueue(c.env.DB,c.get("actor"),data,op,c.get("at"))},201);
+});
+app.post("/api/queue/reorder", async c => {
+  const data = await body(c, queueReorderSchema);
+  const op = await operation(c.req.raw, c.get("actor"), data);
+  await reorderQueue(c.env.DB,c.get("actor"),data,op,c.get("at"));
+  return respond(c, emptyDataSchema, {});
+});
+app.post("/api/queue/:id/:action", async c => {
+  const action = input(queueActionSchema,c.req.param("action"));
+  const data = await body(c, queueJobChangeSchema);
+  const op = await operation(c.req.raw,c.get("actor"),data);
+  await changeQueueJob(c.env.DB,c.get("actor"),id(c.req.param("id")),action,data,op,c.get("at"));
+  return respond(c,emptyDataSchema,{});
 });
 app.patch("/api/jobs/:id", async c => {
   const data = await body(c, editJobInputSchema);

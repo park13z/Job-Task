@@ -21,7 +21,7 @@ test("manager creates a task; line leader and assistant complete it", async ({ p
   await task.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(task.locator("span.rounded-full")).toHaveText("Paused");
   await expect(task.getByRole("button", { name: "Resume", exact: true })).toBeEnabled();
-  await expect(task.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
+  await expect(task.getByRole("button", { name: "Done", exact: true })).toBeEnabled();
   // Reload before resuming to ensure the pause really reached the D1 backend.
   await page.reload();
   await page.getByRole("button", { name: "Job", exact: true }).click();

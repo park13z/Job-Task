@@ -5,8 +5,8 @@ import { formatInstant } from "../shared/time";
 const statusIcons = { todo: Circle, in_progress: Play, paused: Pause, done: Check } as const;
 
 export function Status({ job }: { job: Job }) {
-  const label = { todo: "To do", in_progress: "In progress", paused: "Paused", done: "Done" }[job.status];
-  const tone = { todo: "bg-[#eff3f5] text-[#4e6471]", in_progress: "bg-[#dff5ec] text-[#0c6a50]", paused: "bg-[#fff1d7] text-[#80591b]", done: "bg-red-50 text-destructive" }[job.status];
+  const label = job.cancelledAt !== null ? "Cancelled" : { todo: "To do", in_progress: "In progress", paused: "Paused", done: "Done" }[job.status];
+  const tone = job.cancelledAt !== null ? "bg-[#34454e] text-white" : { todo: "bg-[#eff3f5] text-[#4e6471]", in_progress: "bg-[#dff5ec] text-[#0c6a50]", paused: "bg-[#fff1d7] text-[#80591b]", done: "bg-red-50 text-destructive" }[job.status];
   const Icon = statusIcons[job.status];
   return <span className={"inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold " + tone}><Icon size={13} strokeWidth={2.4} aria-hidden="true" />{label}</span>;
 }

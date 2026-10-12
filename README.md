@@ -9,7 +9,9 @@ Job Task is a web app designed for packhouses and production teams. Plan work fo
 ## Features
 
 - **Weekly planning:** Create tasks for a production line and date, with optional descriptions and skid targets. The server assigns weekly sequence numbers across all lines (Monday–Sunday, `America/Toronto`).
-- **Execution workflow:** Waiting → In Progress → Paused → In Progress → Done. The server records timestamps; active work time excludes paused intervals.
+- **Execution workflow:** Waiting → In Progress → Paused → Resume or Done. The server records timestamps; active work time excludes paused intervals.
+- **Queue management:** In Fill Task choose a date and line, add an **Inserted #N** job above a normal Queue number, or Delete/Cancel/Recall waiting orders. Cancelled rows remain visible (dark) in Fill Task for Recall but are hidden from Live; Delete permanently removes unstarted jobs. Each change requires a reason, stored with actor and time.
+- **Safe queue reordering:** Waiting rows can be dragged after **Unlock Queue** (a safety button, no password). **Undo** reverses each unsaved drag one at a time; **Save** requires a reason; **Lock Queue** protects against accidental movement and prompts before discarding unsaved edits. Normal Queue numbers compact automatically while Inserted badges remain distinct.
 - **One active job per line:** A production line may have multiple queued or paused jobs, but only one job can be **In Progress** on that line at a time. Other lines work independently.
 - **Live wallboard:** Shows due/overdue Waiting Queue jobs, all currently In Progress or Paused jobs (even from earlier dates), and jobs completed today. Includes full-screen mode, adaptive row density, distinct status colors, and animated walking workers.
 - **Dashboard and history:** Review tasks, dates, statuses, and work time beyond the Live display.
@@ -26,7 +28,7 @@ The Live progress animation means **a task is active**. It is *not* a calculated
 3. **Line already occupied:** If another job on that line is running, **Start** or **Resume** is disabled and the screen identifies the running job. The API also rejects competing attempts with HTTP `409 CONFLICT`; the restriction is not just a visual warning.
 4. **Pause:** Press **Pause** to stop recording active work time and release the line. Another queued job on the same line may now start.
 5. **Resume:** A paused job can resume only when its line has no other In Progress job. If another job took the line, pause or complete that job first.
-6. **Done:** Confirm **Done** to finish the running job and release the line. Completed work remains available in **Dashboard/history**; a Done job cannot be resumed.
+6. **Done:** Confirm **Done** to finish a running **or paused** job and release the line. Completed work remains available in **Dashboard/history**; a Done job cannot be resumed.
 
 **Example:** Line A can queue Jobs 101 and 102, but cannot run both at once. While Job 101 is In Progress, Job 102 must wait. Pausing or completing Job 101 frees Line A for Job 102. Meanwhile, Line B can run a job at the same time as Line A.
 
@@ -46,14 +48,14 @@ GROUP BY line_id
 HAVING COUNT(*) > 1;
 ```
 
-If this query returns any rows, review and resolve those jobs through the normal workflow before applying the migration. The migration **fails intentionally** when duplicates exist; it does not change their statuses or remove data. New installations should apply all migrations in numerical order; migration 0007 is **not** automatically applied to an existing live database by updating the code.
+If this query returns any rows, review and resolve those jobs through the normal workflow before applying the migration. The migration **fails intentionally** when duplicates exist; it does not change their statuses or remove data. New installations should apply all migrations in numerical order; migrations **0007 and 0008** are **not** automatically applied to an existing live database by updating the code. Migration 0008 adds separate queue positions, cancelled/inserted flags and the reason audit table; apply it deliberately during an authorized future release, never to production as part of local development.
 
 ## Screens
 
 | Screen | Purpose |
 | --- | --- |
 | Dashboard | Weekly summary and history |
-| Fill Task | Plan new tasks |
+| Fill Task | Plan new tasks, Insert/Delete/Cancel/Recall orders and safely reorder Waiting Queue jobs |
 | Job | Start, Pause, Resume, and Done actions |
 | Live | Full-screen view of active/paused work, due or overdue queue, and today's completions |
 | Team Settings | Users, lines, memberships, and Job List |

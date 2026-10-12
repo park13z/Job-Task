@@ -6,13 +6,14 @@ import { addDays, mondayWeekRange } from "../shared/time";
 import { api, ApiError } from "../lib/api";
 import { friendlyError, operationKey, type Pending } from "../lib/operation";
 import { Button, Dialog, Input, Label, Select, Textarea } from "../components/ui";
+import { QueueManagement } from "./QueueManagement";
 
 type Row = { id: string; workDate: string; lineId: string; title: string; description: string; targetSkids: string };
 const makeRow = (date: string, lineId: string): Row => ({ id: newUuid(), workDate: date, lineId, title: "", description: "", targetSkids: "" });
 function formBody(row: Row) { return { workDate: row.workDate, lineId: row.lineId, title: row.title, description: row.description, ...(row.targetSkids ? { targetSkids: Number(row.targetSkids) } : {}) }; }
 function FieldError({ message, id }: { message?: string; id: string }) { return message ? <p id={id} className="mt-1 text-sm text-destructive">{message}</p> : null; }
 
-export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: Line[]; jobs: Job[]; refresh: () => Promise<void> }) {
+export function FillTask({ week, lines, jobs, revision, refresh }: { week: string; lines: Line[]; jobs: Job[]; revision: number; refresh: () => Promise<void> }) {
   const range = mondayWeekRange(week);
   const activeLines = lines.filter(line => line.active);
   const [selectedWorkDate, setSelectedWorkDate] = useState(range.from);
@@ -137,10 +138,7 @@ export function FillTask({ week, lines, jobs, refresh }: { week: string; lines: 
       </div>
     </>}
     {message && <p role="alert" className={"flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-semibold " + (/successfully/i.test(message) ? "border-[#bfe3d6] bg-[#f1faf6] text-[#0c6a50]" : "border-[#e5baba] bg-[#fef7f7] text-destructive")}>{/successfully/i.test(message) ? <CheckCircle2 size={17} aria-hidden="true" /> : <AlertCircle size={17} aria-hidden="true" />}<span>{message}</span></p>}
-    <div className="surface-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"><div><h3 className="text-base font-extrabold">Editable tasks</h3></div><span className="rounded-lg bg-muted px-3 py-2 text-xs font-bold text-muted-foreground">{jobs.filter(job => job.status === "todo").length} pending</span></div>
-      {jobs.filter(job => job.status === "todo").length === 0 ? <p className="p-6 text-sm text-muted-foreground">No pending tasks this week</p> : <div className="divide-y divide-border">{jobs.filter(job => job.status === "todo").map(job => <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><div className="task-sequence">{job.dayOrder}</div><div><p className="task-meta">{job.workDate} · {lines.find(line => line.id === job.lineId)?.code}</p><p className="mt-1 text-sm font-semibold">{job.title}</p></div></div><Button variant="outline" onClick={() => openEdit(job)}>Edit task</Button></div>)}</div>}
-    </div>
+    <QueueManagement week={week} lines={lines} jobs={jobs} revision={revision} selectedDate={selectedWorkDate} onEdit={openEdit} refresh={refresh}/>
     <Dialog open={editing !== null} onOpenChange={open => { if (!open) { setEditing(null); setEditRow(null); } }} title="Edit pending task">{editRow && <div className="space-y-4">{rowForm(editRow, true)}{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<Button disabled={busy} onClick={() => void saveEdit()}>{busy ? "Saving…" : "Save changes"}</Button></div>}</Dialog>
   </section>;
 }
