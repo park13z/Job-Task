@@ -31,6 +31,31 @@ it("username and password login gives HttpOnly session and logout revokes it",as
     expect((await f.request("/api/me",{token})).status).toBe(401);
   }finally{await f.close();}
 });
+it("keeps ordinary sessions valid for persistent Live displays while retaining revocation", async () => {
+  const f = await createFixture();
+  try {
+    const signedIn = await f.request("/api/auth/login", {user:null,body:{username:"manager",password:TEST_PASSWORD}});
+    expect(signedIn.status).toBe(200);
+    const originalCookie = signedIn.headers.get("set-cookie") ?? "";
+    expect(originalCookie).toContain("Max-Age=34560000");
+    expect(originalCookie).toContain("Secure");
+    expect(originalCookie).toContain("HttpOnly");
+    const token = originalCookie.match(/__Host-jt_session=([A-Za-z0-9_-]{43})/)?.[1];
+    expect(token).toBeTruthy();
+    const row = await f.database.prepare("SELECT expires_at FROM auth_sessions WHERE token_hash=?")
+      .bind((await import("node:crypto")).createHash("sha256").update(token!).digest("hex"))
+      .first<{expires_at:number}>();
+    expect(row?.expires_at).toBe(253402300799000);
+    const response = await f.request("/api/live", {token});
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=34560000");
+    expect(response.headers.get("set-cookie")).toContain("__Host-jt_session="+token);
+    const logout = await f.request("/api/auth/logout", {token,body:{}});
+    expect(logout.status).toBe(200);
+    expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect((await f.request("/api/me", {token})).status).toBe(401);
+  } finally { await f.close(); }
+});
 it("enables an HTTP-only LAN development cookie only with explicit local opt-in",async()=>{
   const f=await createFixture({localHttpSession:true});
   try{

@@ -24,7 +24,11 @@ const server = createServer(async (req, res) => {
         ...(hasRealCookie ? {headers: {Cookie: req.headers.cookie??""}} : {}), ...(raw.length ? { body: JSON.parse(raw) } : {}),
         ...(req.headers["idempotency-key"] ? { key: String(req.headers["idempotency-key"]) } : {}),
       });
-      res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+      // Fixture-provided mock users must not install a real session cookie in
+      // Playwright; otherwise later role overrides via e2e_user stop working.
+      const headers = new Headers(response.headers);
+      if (user !== null && !hasRealCookie) headers.delete("set-cookie");
+      res.writeHead(response.status, Object.fromEntries(headers.entries()));
       res.end(Buffer.from(await response.arrayBuffer()));
       return;
     }

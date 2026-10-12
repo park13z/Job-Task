@@ -8,7 +8,7 @@ import {
   userDataSchema, eventsDataSchema, changesDataSchema, uuidSchema,
   jobTemplateDataSchema, jobTemplatesDataSchema, createJobTemplateInputSchema, editJobTemplateInputSchema, loginInputSchema, resetPasswordInputSchema, changePasswordInputSchema, changeNameInputSchema, emptyDataSchema,
 } from "../shared/contracts";
-import { authenticate, requireManager, login, logout, clearCookie, changePassword, setUserPassword } from "./auth";
+import { authenticate, requireManager, login, logout, clearCookie, renewSessionCookie, changePassword, setUserPassword } from "./auth";
 import { ApiError, input, unavailable } from "./errors";
 import { body, respond } from "./http";
 import { operation } from "./idempotency";
@@ -34,6 +34,11 @@ app.use("/api/*", async (c, next) => {
   if (c.req.path === "/api/auth/login") { await next(); return; }
   c.set("actor", await authenticate(c.req.raw, c.env));
   c.set("at", Date.now());
+  // Sign-out and password changes must clear (never renew) the browser cookie.
+  if (c.req.path !== "/api/auth/logout" && c.req.path !== "/api/auth/change-password") {
+    const refreshed = renewSessionCookie(c.req.raw, c.env);
+    if (refreshed) c.header("Set-Cookie", refreshed);
+  }
   await next();
 });
 app.use("/api", async (c, next) => {

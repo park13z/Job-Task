@@ -6,7 +6,11 @@ import type { User } from "../shared/contracts";
 
 // Cloudflare Workers WebCrypto PBKDF2 supports a maximum of 100,000 iterations.
 const ITERATIONS = 100_000;
-const SESSION_MS = 12 * 60 * 60 * 1000;
+const TEMP_SESSION_MS = 12 * 60 * 60 * 1000;
+// Ordinary sessions have no application-level time limit. Browsers cap cookie
+// persistence (often at 400 days), so authenticated requests renew the cookie.
+const PERSISTENT_SESSION_EXPIRES_AT = 253402300799000; // 9999-12-31 UTC
+const COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 const COOKIE = "__Host-jt_session";
 const bytes = (v: string) => new TextEncoder().encode(v);
 const hex = (v: Uint8Array) => [...v].map(x => x.toString(16).padStart(2,"0")).join("");
@@ -56,7 +60,7 @@ function useLocalHttpCookie(request: Request, env?: Env) {
 function cookieName(request: Request, env?: Env) {
   return useLocalHttpCookie(request, env) ? LOCAL_COOKIE : COOKIE;
 }
-function cookieValue(request: Request, env: Env | undefined, token: string, age = SESSION_MS / 1000) {
+function cookieValue(request: Request, env: Env | undefined, token: string, age = COOKIE_MAX_AGE_SECONDS) {
   const local = useLocalHttpCookie(request, env);
   return `${local ? LOCAL_COOKIE : COOKIE}=${token}; Path=/; ${local ? "" : "Secure; "}HttpOnly; SameSite=Lax; Max-Age=${age}`;
 }
@@ -66,6 +70,11 @@ function cookie(request: Request, env: Env) {
   const all = request.headers.get("cookie") ?? "";
   const raw = all.split(";").map(v => v.trim()).find(v => v.startsWith(name + "="))?.slice(name.length + 1);
   return raw && /^[A-Za-z0-9_-]{43}$/.test(raw) ? raw : null;
+}
+// Refresh browser persistence on authenticated API traffic (not on logout).
+export function renewSessionCookie(request: Request, env: Env) {
+  const token = cookie(request, env);
+  return token ? cookieValue(request, env, token) : null;
 }
 export async function authenticate(request:Request,env:Env):Promise<User> {
   const token=cookie(request, env);
@@ -124,7 +133,7 @@ export async function login(db:D1Database,request:Request,username:string,passwo
     // Base64url gives a fixed-width, unguessable cookie token.
     const raw=btoa(String.fromCharCode(...cookieToken)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=/g,"");
     if (temporary) {
-      const expires=Math.min(at+SESSION_MS,temporary.expires_at);
+      const expires=Math.min(at+TEMP_SESSION_MS,temporary.expires_at);
       const result=await db.batch([
         db.prepare("UPDATE temporary_accounts SET used_at=? WHERE user_id=? AND used_at IS NULL AND expires_at>?")
           .bind(at,user!.id,at),
@@ -139,7 +148,7 @@ export async function login(db:D1Database,request:Request,username:string,passwo
     }
     await db.batch([
       db.prepare("INSERT INTO auth_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)")
-        .bind(await sha256(raw),user!.id,at,at+SESSION_MS),
+        .bind(await sha256(raw),user!.id,at,PERSISTENT_SESSION_EXPIRES_AT),
       db.prepare("DELETE FROM auth_attempts WHERE identifier=?").bind(keys[0].key),
     ]);
     return {cookie:cookieValue(request,env,raw),user:user!};
