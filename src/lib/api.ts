@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  bulkJobsDataSchema, changesDataSchema, errorSchema, eventsDataSchema,
+  bulkJobsDataSchema, changesDataSchema, errorSchema, eventsDataSchema, displayStatusSchema, displayDevicesSchema, displayLiveSchema,
   jobDataSchema, jobsDataSchema, liveDataSchema, lineDataSchema, linesDataSchema, meDataSchema,
   summaryDataSchema, userDataSchema, usersDataSchema, jobTemplatesDataSchema, jobTemplateDataSchema, emptyDataSchema,
 } from "../shared/contracts";
@@ -49,6 +49,11 @@ export const api = {
   changes: (signal?: AbortSignal) => request("/changes", changesDataSchema, { signal }),
   jobs: (query: URLSearchParams, signal?: AbortSignal) => request(`/jobs?${query}`, jobsDataSchema, { signal }),
   live: (signal?: AbortSignal) => request("/live", liveDataSchema, { signal }),
+  displayState: (signal?: AbortSignal) => request("/display/state", displayStatusSchema, { signal }),
+  displayRequest: () => request("/display/request", displayStatusSchema, { method:"POST", headers:{"Content-Type":"application/json"}, body:"{}" }),
+  displayLive: (signal?: AbortSignal) => request("/display/live", displayLiveSchema, { signal }),
+  displayDevices: (signal?: AbortSignal) => request("/display/devices", displayDevicesSchema, { signal }),
+  decideDisplay: (id:string, action:"approve"|"reject"|"revoke") => request(`/display/devices/${id}/${action}`,emptyDataSchema,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}),
   summary: (query: URLSearchParams, signal?: AbortSignal) => request(`/summary?${query}`, summaryDataSchema, { signal }),
   events: (id: string, signal?: AbortSignal) => request(`/jobs/${id}/events`, eventsDataSchema, { signal }),
   mutate: <T extends z.ZodType>(path: string, method: "POST" | "PATCH" | "PUT" | "DELETE", body: unknown, schema: T, key?: string) =>

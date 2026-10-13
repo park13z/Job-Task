@@ -29,6 +29,7 @@ const teamPaths: Record<TeamSection, string> = {
   lines: "/team-settings/lines",
   members: "/team-settings/members",
   catalog: "/team-settings/job-list",
+  displays: "/team-settings/displays",
 };
 function teamSectionFromPath(path: string): TeamSection {
   return (Object.keys(teamPaths) as TeamSection[]).find(section => teamPaths[section] === path) ?? "users";

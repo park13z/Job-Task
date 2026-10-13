@@ -18,7 +18,8 @@ const lanes: { id: Lane; label: string; empty: string; icon: typeof PlayCircle }
 ];
 
 
-export function LiveBoard({ lines }: { lines: Line[] }) {
+export function LiveBoard({ lines, display = false }: { lines: Line[]; display?: boolean }) {
+  const [displayLines, setDisplayLines] = useState<Line[]>(lines);
   const [data, setData] = useState<LiveData | null>(null);
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
@@ -28,16 +29,23 @@ export function LiveBoard({ lines }: { lines: Line[] }) {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await api.live(signal);
-      if (signal?.aborted) return;
-      setData(response.data);
+      if (display) {
+        const response = await api.displayLive(signal);
+        if (signal?.aborted) return;
+        setData(response.data.live);
+        setDisplayLines(response.data.lines);
+      } else {
+        const response = await api.live(signal);
+        if (signal?.aborted) return;
+        setData(response.data);
+      }
       setUpdatedAt(Date.now());
       setError("");
     } catch (reason) {
       if (signal?.aborted) return;
       setError(reason instanceof Error ? reason.message : "Unable to load live jobs.");
     }
-  }, []);
+  }, [display]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,7 +157,7 @@ export function LiveBoard({ lines }: { lines: Line[] }) {
           <div className="live-lane-tasks">
             {data[lane.id].length === 0
               ? <p className="live-lane-empty">{lane.empty}</p>
-              : data[lane.id].map(job => <LiveTask key={job.id} job={job} lines={lines} today={data.date} />)}
+              : data[lane.id].map(job => <LiveTask key={job.id} job={job} lines={display ? displayLines : lines} today={data.date} />)}
             {lane.id === "inProgress" && data.inProgress.length > 0 && <LiveWalkers />}
           </div>
         </section>)}

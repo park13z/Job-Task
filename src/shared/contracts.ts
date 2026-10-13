@@ -220,6 +220,15 @@ export const jobsDataSchema = z.strictObject({
 });
 export const jobDataSchema = z.strictObject({ job: jobSchema });
 export const liveDataSchema = z.strictObject({ date: businessDateSchema, inProgress: z.array(jobSchema), paused: z.array(jobSchema), done: z.array(jobSchema), queued: z.array(jobSchema) });
+export const displayStatusSchema = z.strictObject({status: z.enum(["unregistered","pending","approved","rejected","revoked"])});
+export const displayLiveSchema = z.strictObject({live: liveDataSchema, lines: z.array(lineSchema)});
+export const displayDeviceSchema = z.strictObject({
+  id: uuidSchema, status: z.enum(["pending","approved","rejected","revoked"]),
+  browser: z.string(), createdAt: instantSchema, updatedAt: instantSchema,
+  approvedAt: instantSchema.nullable(), approvedBy: z.string().nullable(),
+});
+export const displayDevicesSchema = z.strictObject({devices: z.array(displayDeviceSchema)});
+
 export const bulkJobsDataSchema = z.strictObject({ jobs: z.array(jobSchema) });
 export const eventsDataSchema = z.strictObject({ events: z.array(jobEventSchema) });
 export const summaryDataSchema = z.strictObject({

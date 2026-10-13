@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { TeamSettingsNavigation, teamSections, type TeamSection } from "./TeamSettingsNavigation";
+import { DisplayDevices } from "./DisplayDevices";
 import type { JobTemplate, Line, Role, User } from "../shared/contracts";
 import { api } from "../lib/api";
 import { friendlyError } from "../lib/operation";
@@ -121,6 +122,7 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
               <Button variant="outline" disabled={busy} onClick={() => void run(() => api.member(line.id,user.id,!line.memberIds.includes(user.id)))}>{line.memberIds.includes(user.id) ? "Remove" : "Add member"}</Button></div>)}</div>
           </div>)}</div>
         </div>}
+        {section === "displays" && <DisplayDevices />}
         {section === "catalog" && <>
           <div className="form-panel p-5">
             {heading("JOB LIST / STANDARD TASKS", "Add a reusable job", "Assign jobs to their production lines. A job may belong to more than one line.")}

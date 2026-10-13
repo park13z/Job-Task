@@ -5,7 +5,7 @@ import {
   createUserInputSchema, editJobInputSchema, editLineInputSchema, editUserInputSchema,
   jobDataSchema, bulkJobsDataSchema, jobsDataSchema, jobQuerySchema, summaryQuerySchema,
   summaryDataSchema, liveDataSchema, meDataSchema, linesDataSchema, lineDataSchema, usersDataSchema,
-  userDataSchema, eventsDataSchema, changesDataSchema, uuidSchema,
+  userDataSchema, eventsDataSchema, changesDataSchema, uuidSchema, displayStatusSchema, displayLiveSchema, displayDevicesSchema,
   jobTemplateDataSchema, jobTemplatesDataSchema, createJobTemplateInputSchema, editJobTemplateInputSchema, loginInputSchema, resetPasswordInputSchema, changePasswordInputSchema, changeNameInputSchema, emptyDataSchema,
 } from "../shared/contracts";
 import { authenticate, requireManager, login, logout, clearCookie, renewSessionCookie, changePassword, setUserPassword } from "./auth";
@@ -15,6 +15,7 @@ import { operation } from "./idempotency";
 import { businessDate } from "./job-projection";
 import { queryJobs, summary } from "./job-queries";
 import { liveJobs } from "./live-queries";
+import { displayStatus, requestDisplay, setDisplayCookie, displaySnapshot, listDisplays, decideDisplay } from "./display-access";
 import { createJobs, editJob, actOnJob } from "./job-writes";
 import { insertQueue, reorderQueue, changeQueueJob } from "./queue-writes";
 import { revision, users, lines, events, findUser } from "./reads";
@@ -31,7 +32,12 @@ app.onError((error, c) => {
 });
 app.use("/api/*", async (c, next) => {
   c.header("Cache-Control", "no-store");
-  if (c.req.path === "/api/auth/login") { await next(); return; }
+  if (c.req.path === "/api/auth/login" ||
+      c.req.path === "/api/display/state" || c.req.path === "/api/display/request" ||
+      c.req.path === "/api/display/live") {
+    c.set("at", Date.now());
+    await next(); return;
+  }
   c.set("actor", await authenticate(c.req.raw, c.env));
   c.set("at", Date.now());
   // Sign-out and password changes must clear (never renew) the browser cookie.
@@ -145,6 +151,25 @@ app.get("/api/changes", async c => respond(c, changesDataSchema, { revision: awa
 app.get("/api/jobs", async c => respond(c, jobsDataSchema, await queryJobs(c.env.DB, c.get("actor"), input(jobQuerySchema, query(c)), c.get("at"), true)));
 app.get("/api/summary", async c => respond(c, summaryDataSchema, await summary(c.env.DB, c.get("actor"), input(summaryQuerySchema, query(c)), c.get("at"))));
 app.get("/api/live", async c => respond(c, liveDataSchema, await liveJobs(c.env.DB, c.get("actor"), c.get("at"))));
+app.get("/api/display/state", async c => respond(c, displayStatusSchema, await displayStatus(c.env.DB, c.req.raw, c.env)));
+app.post("/api/display/request", async c => {
+  await body(c, emptyDataSchema);
+  const result = await requestDisplay(c.env.DB, c.req.raw, c.env, c.get("at"));
+  c.header("Set-Cookie", setDisplayCookie(c.req.raw, c.env, result.token));
+  return respond(c, displayStatusSchema, { status: result.status });
+});
+app.get("/api/display/live", async c => respond(c, displayLiveSchema, await displaySnapshot(c.env.DB, c.req.raw, c.env, c.get("at"))));
+app.get("/api/display/devices", async c => {
+  requireManager(c.get("actor"));
+  return respond(c, displayDevicesSchema, await listDisplays(c.env.DB));
+});
+app.post("/api/display/devices/:id/:action", async c => {
+  requireManager(c.get("actor"));
+  await body(c, emptyDataSchema);
+  const action = input(z.enum(["approve","reject","revoke"]), c.req.param("action"));
+  await decideDisplay(c.env.DB, c.get("actor"), id(c.req.param("id")), action, c.get("at"));
+  return respond(c, emptyDataSchema, {});
+});
 app.get("/api/jobs/:id/events", async c => respond(c, eventsDataSchema, { events: await events(c.env.DB, c.get("actor"), id(c.req.param("id")), c.get("at")) }));
 app.post("/api/jobs", async c => {
   const data = await body(c, bulkJobInputSchema);

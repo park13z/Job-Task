@@ -26,6 +26,7 @@ const passwordHash=Buffer.from(pbkdf2Sync(TEST_PASSWORD,Buffer.from(salt,"hex"),
 const hash=(token:string)=>createHash("sha256").update(token).digest("hex");
 type RequestOptions={user?:TestUser|null;method?:string;body?:unknown;key?:string;headers?:Record<string,string>;token?:string};
 export async function createFixture(options:{seatBudget?:string;empty?:boolean;localHttpSession?:boolean}={}) {
+  const localFixtureSession = options.localHttpSession === true;
   const mf=new Miniflare(convertV4MiniflareOptions({
     scriptPath:fileURLToPath(new URL("../../build/worker.js",import.meta.url)),
     modules:true,compatibilityDate:"2026-10-08",compatibilityFlags:["nodejs_compat"],d1Databases:{DB:"job-task-test"},
@@ -33,7 +34,7 @@ export async function createFixture(options:{seatBudget?:string;empty?:boolean;l
   }));
   try {
     const database=await mf.getD1Database("DB");
-    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql","0007_single_active_job_per_line.sql","0008_queue_management.sql"]){
+    for(const file of ["0001_initial.sql","0002_job_templates.sql","0003_job_template_lines.sql","0004_native_auth.sql","0005_short_usernames.sql","0006_temporary_accounts.sql","0007_single_active_job_per_line.sql","0008_queue_management.sql","0009_private_live_display.sql"]){
       const sql=await readFile(new URL(`../../migrations/${file}`,import.meta.url),"utf8");
       for(const raw of sql.replace(/\r\n/g,"\n").split(/;\s*\n/)){
         // Strip all leading SQL comments before applying migrations, including
@@ -73,7 +74,7 @@ export async function createFixture(options:{seatBudget?:string;empty?:boolean;l
     async function request(path:string,options:RequestOptions={}) {
       const headers=new Headers(options.headers);
       const raw=options.token??(options.user===null?null:tokens[options.user??"manager"]);
-      if(raw)headers.set("Cookie","__Host-jt_session="+raw);
+      if(raw)headers.set("Cookie",(localFixtureSession ? "jt_local_session=" : "__Host-jt_session=")+raw);
       if(options.body!==undefined){
         if(!headers.has("Content-Type"))headers.set("Content-Type","application/json");
         if(!headers.has("Origin"))headers.set("Origin",TEST_ORIGIN);

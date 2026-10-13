@@ -1,13 +1,14 @@
-import { BookOpen, ChevronRight, Factory, UserRoundCog, UsersRound } from "lucide-react";
+import { BookOpen, ChevronRight, Factory, Monitor, UserRoundCog, UsersRound } from "lucide-react";
 import { Button } from "../components/ui";
 
-export type TeamSection = "users" | "lines" | "members" | "catalog";
+export type TeamSection = "users" | "lines" | "members" | "catalog" | "displays";
 
 export const teamSections = [
   { id: "users", name: "Users", description: "Accounts and roles", icon: UsersRound },
   { id: "lines", name: "Production Lines", description: "Manage line names", icon: Factory },
   { id: "members", name: "Line Members", description: "Team assignments", icon: UserRoundCog },
   { id: "catalog", name: "Job List", description: "Reusable task names", icon: BookOpen },
+  { id: "displays", name: "Live Displays", description: "Approve viewing devices", icon: Monitor },
 ] as const;
 
 export function TeamSettingsNavigation({
