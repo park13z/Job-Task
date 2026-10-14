@@ -16,7 +16,7 @@ Job Task is a web app designed for packhouses and production teams. Plan work fo
 - **Live wallboard:** Shows due/overdue Waiting Queue jobs, all currently In Progress or Paused jobs (even from earlier dates), and jobs completed today. Includes full-screen mode, adaptive row density, distinct status colors, and animated walking workers.
 - **Dashboard and history:** Review tasks, dates, statuses, and work time beyond the Live display.
 - **Role and line controls:** Manager, Supervisor, Line Leader, and Assistant access with line membership rules.
-- **Reusable job names:** Managers maintain the Job List; planners can select or enter their own task titles.
+- **Reusable job names:** Managers and Supervisors may add Job List entries; only Managers may edit or deactivate them. Planners can also enter custom task titles.
 - **User profile:** Users can update their display name and password.
 
 The Live progress animation means **a task is active**. It is *not* a calculated completion percentage or a machine integration.
@@ -58,7 +58,7 @@ If this query returns any rows, review and resolve those jobs through the normal
 | Fill Task | Plan new tasks, Insert/Delete/Cancel/Recall orders and safely reorder Waiting Queue jobs |
 | Job | Start, Pause, Resume, and Done actions |
 | Live | Full-screen view of active/paused work, due or overdue queue, and today's completions |
-| Team Settings | Users, lines, memberships, and Job List |
+| Team Settings | Managers manage users, lines, memberships, Job List and Live Displays; Supervisors can add lines and Job List entries |
 | User Profile | Update display name and password |
 
 ## Quick start
