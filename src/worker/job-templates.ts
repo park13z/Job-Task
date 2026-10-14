@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { jobTemplateSchema, type User } from "../shared/contracts";
-import { managerGuard } from "./job-projection";
+import { managerGuard, plannerGuard } from "./job-projection";
 import { ApiError, conflict, isConstraint, output, unavailable, notFound } from "./errors";
 
 const templateRow = z.strictObject({
@@ -79,7 +79,7 @@ export async function createJobTemplate(db: D1Database, actor: User,
   const lineIds = data.lineIds ?? [];
   const guard = lineGuard(lineIds);
   await write(db, db.prepare(`INSERT INTO job_templates (id,name,created_at,updated_at)
-    SELECT ?,?,?,? WHERE ${managerGuard} AND ${guard.sql}`)
+    SELECT ?,?,?,? WHERE ${plannerGuard} AND ${guard.sql}`)
     .bind(id,data.name,at,at,actor.id,...guard.bindings), inserts(db,id,lineIds));
   return template(db,id,actor);
 }

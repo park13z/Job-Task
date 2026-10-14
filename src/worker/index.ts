@@ -8,7 +8,7 @@ import {
   userDataSchema, eventsDataSchema, changesDataSchema, uuidSchema, displayStatusSchema, displayLiveSchema, displayDevicesSchema,
   jobTemplateDataSchema, jobTemplatesDataSchema, createJobTemplateInputSchema, editJobTemplateInputSchema, loginInputSchema, resetPasswordInputSchema, changePasswordInputSchema, changeNameInputSchema, emptyDataSchema,
 } from "../shared/contracts";
-import { authenticate, requireManager, login, logout, clearCookie, renewSessionCookie, changePassword, setUserPassword } from "./auth";
+import { authenticate, requireManager, requirePlanner, login, logout, clearCookie, renewSessionCookie, changePassword, setUserPassword } from "./auth";
 import { ApiError, input, unavailable } from "./errors";
 import { body, respond } from "./http";
 import { operation } from "./idempotency";
@@ -117,7 +117,7 @@ app.delete("/api/users/:id", async c => {
 });
 app.get("/api/lines", async c => respond(c, linesDataSchema, { lines: await lines(c.env.DB, c.get("actor")) }));
 app.post("/api/lines", async c => {
-  requireManager(c.get("actor"));
+  requirePlanner(c.get("actor"));
   const data = await body(c, createLineInputSchema);
   return respond(c, lineDataSchema, { line: await createLine(c.env.DB, c.get("actor"), data) }, 201);
 });
@@ -138,7 +138,7 @@ for (const method of ["put", "delete"] as const) {
 app.get("/api/job-list", async c =>
   respond(c, jobTemplatesDataSchema, { templates: await jobTemplates(c.env.DB, c.get("actor")) }));
 app.post("/api/job-list", async c => {
-  requireManager(c.get("actor"));
+  requirePlanner(c.get("actor"));
   const data = await body(c, createJobTemplateInputSchema);
   return respond(c, jobTemplateDataSchema, { template: await createJobTemplate(c.env.DB, c.get("actor"), data, c.get("at")) }, 201);
 });

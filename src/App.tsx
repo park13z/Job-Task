@@ -70,7 +70,7 @@ export default function App() {
     setMoreOpen(false);
     const path = pagePaths[target];
     if (window.location.pathname !== path) window.history.pushState({}, "", path);
-    if (target === "settings") setTeamSection("users");
+    if (target === "settings") setTeamSection(user?.role === "supervisor" ? "lines" : "users");
     setPage(target);
   };
   const navigateTeamSection = (section: TeamSection) => {
@@ -87,11 +87,14 @@ export default function App() {
     // URL entry must not bypass the existing role-based page visibility.
     // The server still enforces every permission on API routes.
     if (!user) return;
-    if ((page === "fill" && !isPlanner(user.role)) || (page === "settings" && user.role !== "manager")) {
+    if ((page === "fill" && !isPlanner(user.role)) || (page === "settings" && !isPlanner(user.role))) {
       window.history.replaceState(window.history.state, "", pagePaths.dashboard);
       setPage("dashboard");
+    } else if (page === "settings" && user.role === "supervisor" && teamSection !== "lines" && teamSection !== "catalog") {
+      window.history.replaceState(window.history.state, "", teamPaths.lines);
+      setTeamSection("lines");
     }
-  }, [page, user]);
+  }, [page, teamSection, user]);
   const current = page === "settings" ? { label: "Team Settings", sub: "Manage workspace" } : page === "profile" ? { label: "User Profile", sub: "My account" } : navigation.find(item => item.id === page) ?? navigation[0];
   const syncedTime = state.kind === "ready" ? new Intl.DateTimeFormat("en-CA", {
     timeZone: TORONTO_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
@@ -127,7 +130,7 @@ export default function App() {
           <div className="space-y-2">
             <p className="mb-4 text-sm text-muted-foreground">{user.name} · {user.role.replace("_", " ")}</p>
             <Button variant="outline" className="w-full justify-start" onClick={() => navigate("profile")}><UserRound size={18} aria-hidden="true" />User Profile</Button>
-            {user.role === "manager" && <Button variant="outline" className="w-full justify-start" onClick={() => navigate("settings")}><Settings2 size={18} aria-hidden="true" />Team Settings</Button>}
+            {isPlanner(user.role) && <Button variant="outline" className="w-full justify-start" onClick={() => navigate("settings")}><Settings2 size={18} aria-hidden="true" />Team Settings</Button>}
             <Button variant="ghost" className="w-full justify-start" onClick={() => { setMoreOpen(false); void api.logout().finally(() => void refresh(true)); }}><LogOut size={18} aria-hidden="true" />Sign out</Button>
           </div>
         </Dialog>}
@@ -141,7 +144,7 @@ export default function App() {
           <Button variant="ghost" aria-label="User Profile" aria-current={page === "profile" ? "page" : undefined} className={"app-settings-button " + (page === "profile" ? "!bg-[#234c50] !text-white" : "")} onClick={() => navigate("profile")}><UserRound size={18} aria-hidden="true" /><span>User Profile</span></Button>
           <Button variant="ghost" className="app-settings-button" onClick={()=>void api.logout().finally(()=>void refresh(true))}>Sign out</Button>
         </div>}
-        {user?.role === "manager" && <Button variant="ghost" aria-current={page === "settings" ? "page" : undefined} className={"app-settings-button "+(page==="settings" ? "!bg-[#234c50] !text-white" : "")} aria-label="Team Settings" onClick={() => navigate("settings")}><Settings2 size={18} aria-hidden="true" /><span>Team Settings</span></Button>}
+        {user && isPlanner(user.role) && <Button variant="ghost" aria-current={page === "settings" ? "page" : undefined} className={"app-settings-button "+(page==="settings" ? "!bg-[#234c50] !text-white" : "")} aria-label="Team Settings" onClick={() => navigate("settings")}><Settings2 size={18} aria-hidden="true" /><span>Team Settings</span></Button>}
       </div>
     </aside>
 
@@ -183,7 +186,7 @@ export default function App() {
 
         {state.kind === "loading" ? <div role="status" className="app-empty-state"><RefreshCw className="animate-spin text-primary" size={24} /><p>Loading tasks…</p></div> : state.kind === "error" ? <div role="alert" className="app-empty-state"><ShieldCheck className="text-destructive" size={30} /><h2 className="font-semibold">{state.status === 403 ? "Access denied" : state.status === 503 ? "System unavailable" : "Unable to load data"}</h2><p className="text-sm text-muted-foreground">{state.message}</p><Button onClick={() => void refresh(true)}>Try again</Button></div> : <>
           {state.stale && <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#c2650a]/40 bg-card px-4 py-3 text-sm text-[#9a4a00]">{state.message ?? "Unable to sync data"} <Button variant="outline" onClick={() => void refresh()}>Try again</Button></div>}
-          {page === "settings" && state.value.me.user.role === "manager" ? <TeamSettings lines={state.value.lines} refresh={refresh} actorId={state.value.me.user.id} section={teamSection} onSectionSelect={navigateTeamSection} /> : page === "profile" ? <UserProfile key={state.value.me.user.id} user={state.value.me.user} refresh={refresh} onChangePassword={() => setChangePasswordOpen(true)} /> : page === "live" ? <LiveBoard lines={state.value.lines} /> : page === "dashboard" ? <Dashboard value={state.value} /> : page === "fill" && isPlanner(state.value.me.user.role) ? <FillTask week={filters.week} lines={state.value.lines} jobs={state.value.jobs} revision={state.value.revision} refresh={refresh} /> : <Jobs jobs={state.value.jobs} lines={state.value.lines} user={state.value.me.user} refresh={refresh} />}
+          {page === "settings" && isPlanner(state.value.me.user.role) ? <TeamSettings lines={state.value.lines} refresh={refresh} actorId={state.value.me.user.id} actorRole={state.value.me.user.role} section={teamSection} onSectionSelect={navigateTeamSection} /> : page === "profile" ? <UserProfile key={state.value.me.user.id} user={state.value.me.user} refresh={refresh} onChangePassword={() => setChangePasswordOpen(true)} /> : page === "live" ? <LiveBoard lines={state.value.lines} /> : page === "dashboard" ? <Dashboard value={state.value} /> : page === "fill" && isPlanner(state.value.me.user.role) ? <FillTask week={filters.week} lines={state.value.lines} jobs={state.value.jobs} revision={state.value.revision} refresh={refresh} /> : <Jobs jobs={state.value.jobs} lines={state.value.lines} user={state.value.me.user} refresh={refresh} />}
           {page !== "settings" && page !== "profile" && page !== "live" && state.value.cursor && <div className="mt-6 text-center"><Button variant="outline" onClick={() => void loadMore()}>Load more tasks</Button></div>}
         </>}
         <footer className="app-footer"><span>Developed by Sanongboon Poona / Truly Green Farms · © 2026 · MIT License</span><span className="inline-flex items-center gap-1.5"><Activity size={13} aria-hidden="true" /> Local production schedule</span></footer>

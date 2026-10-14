@@ -15,8 +15,8 @@ const heading = (eyebrow: string, title: string, subtitle: string) => <div class
   <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
 </div>;
 
-export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect }: {
-  lines: Line[]; refresh: () => Promise<void>; actorId: string;
+export function TeamSettings({ lines, refresh, actorId, actorRole, section, onSectionSelect }: {
+  lines: Line[]; refresh: () => Promise<void>; actorId: string; actorRole: Role;
   section: TeamSection; onSectionSelect: (section: TeamSection) => void;
 }) {
   const [users, setUsers] = useState<User[]>([]);
@@ -37,10 +37,13 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
+  const isManager = actorRole === "manager";
   const reload = useCallback(async () => {
-    const [people, catalog] = await Promise.all([api.users(), api.jobTemplates()]);
-    setUsers(people.data.users); setTemplates(catalog.data.templates);
-  }, []);
+    const [people, catalog] = await Promise.all([
+      actorRole === "manager" ? api.users() : Promise.resolve(null), api.jobTemplates(),
+    ]);
+    setUsers(people?.data.users ?? []); setTemplates(catalog.data.templates);
+  }, [actorRole]);
   useEffect(() => { void reload().catch(error => setMessage(friendlyError(error))); }, [reload]);
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setMessage("");
@@ -64,7 +67,7 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
     <h2 className="sr-only">Workspace settings</h2>
     <p className="section-description">Choose a section to manage. Each area has its own workspace.</p>
     <div className="grid items-start gap-5 lg:grid-cols-[225px_minmax(0,1fr)]">
-      <TeamSettingsNavigation selected={section} onSelect={next => {
+      <TeamSettingsNavigation role={actorRole} selected={section} onSelect={next => {
         onSectionSelect(next);
         setMessage("");
         setEditingUser(null);
@@ -73,7 +76,7 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
       }}/>
       <div className="min-w-0 space-y-5" aria-label={activeSection.name}>
         {message && <p role="status" className="rounded-lg border border-border bg-white px-4 py-3 text-sm font-semibold">{message}</p>}
-        {section === "users" && <>
+        {section === "users" && isManager && <>
           <div className="form-panel p-5">{heading("USERS / CREATE", "Add user", "Create an account and give the user their temporary password privately.")}
             <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="new-user-name">Name</Label><Input id="new-user-name" value={name} maxLength={100} onChange={event => setName(event.target.value)}/></div>
               <div><Label htmlFor="new-user-username">Username</Label><Input id="new-user-username" autoComplete="off" minLength={2} maxLength={32} value={username} onChange={event => setUsername(event.target.value.toLowerCase())}/></div>
@@ -109,12 +112,12 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
           <div className="form-panel p-5">{heading("LINES / DIRECTORY", "Production lines", "Manage one line at a time.")}
             <div className="space-y-2">{lines.map(line => <div key={line.id} className="rounded-xl border border-border bg-[#fafcfc] p-3">
               <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold">{line.code} · {line.name}</p><p className="text-xs text-muted-foreground">{line.active ? "Active" : "Inactive"} · {line.memberIds.length} assigned</p></div>
-                <Button variant="outline" onClick={() => setEditingLine(current => current?.id === line.id ? null : line)}>{editingLine?.id === line.id ? "Close" : "Edit line"}</Button></div>
-              {editingLine?.id === line.id && <LineEdit key={line.id} line={line} busy={busy} save={data => void run(async () => { await api.editLine(line.id,data); setEditingLine(null); })}/>}
+                {isManager && <Button variant="outline" onClick={() => setEditingLine(current => current?.id === line.id ? null : line)}>{editingLine?.id === line.id ? "Close" : "Edit line"}</Button>}</div>
+              {isManager && editingLine?.id === line.id && <LineEdit key={line.id} line={line} busy={busy} save={data => void run(async () => { await api.editLine(line.id,data); setEditingLine(null); })}/>}
             </div>)}</div>
           </div>
         </>}
-        {section === "members" && <div className="form-panel p-5">{heading("LINE MEMBERS / ASSIGNMENTS", "Assign people to lines", "Add or remove members without changing the user account.")}
+        {section === "members" && isManager && <div className="form-panel p-5">{heading("LINE MEMBERS / ASSIGNMENTS", "Assign people to lines", "Add or remove members without changing the user account.")}
           {executors.length === 0 && <p className="text-sm text-muted-foreground">Add a Line Leader or Assistant in Users first.</p>}
           <div className="space-y-4">{lines.map(line => <div key={line.id} className="rounded-xl border border-border p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><strong>{line.code} · {line.name}</strong><span className="text-xs text-muted-foreground">{line.active ? "Active" : "Inactive"}</span></div>
@@ -122,7 +125,7 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
               <Button variant="outline" disabled={busy} onClick={() => void run(() => api.member(line.id,user.id,!line.memberIds.includes(user.id)))}>{line.memberIds.includes(user.id) ? "Remove" : "Add member"}</Button></div>)}</div>
           </div>)}</div>
         </div>}
-        {section === "displays" && <DisplayDevices />}
+        {section === "displays" && isManager && <DisplayDevices />}
         {section === "catalog" && <>
           <div className="form-panel p-5">
             {heading("JOB LIST / STANDARD TASKS", "Add a reusable job", "Assign jobs to their production lines. A job may belong to more than one line.")}
@@ -166,13 +169,13 @@ export function TeamSettings({ lines, refresh, actorId, section, onSectionSelect
                     template.lineIds.length ? template.lineIds.map(lineId => lines.find(line => line.id === lineId)?.code ?? "Unknown line").join(", ") : "Unassigned"
                   }</p>
                 </div>
-                <Button variant="outline" onClick={() => {
+                {isManager && <Button variant="outline" onClick={() => {
                   const next=editingTemplate?.id === template.id ? null : template;
                   setEditingTemplate(next); setTemplateEditName(next?.name ?? "");
                   setTemplateEditLineIds(next?.lineIds.filter(id => activeLines.some(line => line.id === id)) ?? []);
-                }}>{editingTemplate?.id === template.id ? "Close" : "Edit"}</Button>
+                }}>{editingTemplate?.id === template.id ? "Close" : "Edit"}</Button>}
               </div>
-              {editingTemplate?.id === template.id && <div className="mt-4 space-y-3 border-t border-border pt-4">
+              {isManager && editingTemplate?.id === template.id && <div className="mt-4 space-y-3 border-t border-border pt-4">
                 <Label htmlFor="edit-job-template-name">Job name</Label>
                 <Input id="edit-job-template-name" maxLength={200} value={templateEditName}
                   onChange={event => setTemplateEditName(event.target.value)}/>

@@ -1,6 +1,6 @@
 import type { User, Role } from "../shared/contracts";
 import type { Env } from "./types";
-import { managerGuard } from "./job-projection";
+import { managerGuard, plannerGuard } from "./job-projection";
 import { ApiError, conflict, isConstraint, unavailable } from "./errors";
 import { findUser, findLine } from "./reads";
 import { hashPassword } from "./auth";
@@ -79,7 +79,7 @@ export async function deleteTemporaryUser(db:D1Database,actor:User,targetId:stri
 export async function createLine(db: D1Database, actor: User, data: { code: string; name: string }) {
   const id = crypto.randomUUID();
   await write(db, db.prepare(`INSERT INTO production_lines (id,code,name)
-    SELECT ?,?,? WHERE ${managerGuard}`).bind(id, data.code, data.name, actor.id));
+    SELECT ?,?,? WHERE ${plannerGuard}`).bind(id, data.code, data.name, actor.id));
   return findLine(db, actor, id);
 }
 

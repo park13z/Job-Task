@@ -3,12 +3,12 @@ import { createFixture, LINES } from "./harness/fixture";
 import { successSchema, jobTemplatesDataSchema, jobTemplateDataSchema, bulkJobsDataSchema } from "../src/shared/contracts";
 import { businessDate } from "../src/shared/time";
 
-it("manager controls Job List while all active roles may select active names", async () => {
+it("Manager edits Job List while active roles can select names", async () => {
   const f = await createFixture();
   try {
     expect((await f.request("/api/job-list", { user: "leader" })).status).toBe(200);
     expect((await f.request("/api/job-list", { user: "inactive" })).status).toBe(403);
-    expect((await f.request("/api/job-list", { user: "supervisor", body: { name: "Unauthorized" } })).status).toBe(403);
+    expect((await f.request("/api/job-list", { user: "supervisor", body: { name: " " } })).status).toBe(400);
     const created = await f.request("/api/job-list", { user: "manager", body: { name: "  Pack 8x341g LOB  ", lineIds: [LINES.ckt1a] } });
     expect(created.status).toBe(201);
     const first = successSchema(jobTemplateDataSchema).parse(await created.json()).data.template;
