@@ -21,7 +21,8 @@ describe("Pages advanced-mode deep links", () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toContain("text/html");
     }
-    expect(urls).toEqual(Array(10).fill("/index.html"));
+    expect(urls).toEqual(["/index.html", "/index.html", "/index.html", "/index.html",
+      "/", "/index.html", "/index.html", "/", "/index.html", "/"]);
     await pages.fetch(new Request("https://example.com/assets/script.js"), env, ctx);
     expect(urls.at(-1)).toBe("/assets/script.js");
     await pages.fetch(new Request("https://example.com/live", { method: "POST" }), env, ctx);

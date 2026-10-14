@@ -18,7 +18,9 @@ export default {
     const appPages = new Set(["/dashboard", "/fill-task", "/job", "/live", "/display/live", "/team-settings", "/profile",
       "/team-settings/users", "/team-settings/lines", "/team-settings/members", "/team-settings/job-list", "/team-settings/displays"]);
     if ((request.method === "GET" || request.method === "HEAD") && appPages.has(path)) {
-      const entry = path === "/display/live" || path === "/team-settings/displays" ? "/" : "/index.html";
+      const entry = path === "/display/live" || path === "/team-settings/displays" ||
+        path === "/team-settings" || path === "/team-settings/lines" || path === "/team-settings/job-list"
+        ? "/" : "/index.html";
       return env.ASSETS.fetch(new Request(new URL(entry, request.url), request));
     }
     return env.ASSETS.fetch(request);
