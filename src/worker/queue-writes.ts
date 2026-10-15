@@ -3,7 +3,7 @@ import { requirePlanner } from "./auth";
 import { ApiError, conflict, isConstraint, unavailable } from "./errors";
 import { jobJson, plannerGuard } from "./job-projection";
 import { findJob } from "./reads";
-import type { Operation } from "./idempotency";
+import { replay, type Operation } from "./idempotency";
 import { mondayWeekRange } from "../shared/time";
 
 type QueueRow = {
@@ -35,16 +35,20 @@ async function priorChange(db: D1Database, actor: User, op: Operation, action: Q
 }
 
 function record(db:D1Database, actor:User, op:Operation, action:QueueAction, jobId:string|null,
-  date:string, line:string, reason:string, before:string[], after:string[], at:number, revision:number, jobGuard?:{id:string;version:number}) {
-  // The NOT NULL constraint rejects a stale revision or job inside the same atomic D1 batch.
+  date:string, line:string, reason:string, before:string[], after:string[], at:number, revision:number,
+  jobGuard?:{id:string;version:number}, requireActiveLine=false) {
+  // Failing any guard must violate queue_actions.id NOT NULL and roll back the entire D1 batch.
   const jobCheck = jobGuard
     ? " AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND version=? AND status='todo')"
     : "";
+  const lineCheck = requireActiveLine
+    ? " AND EXISTS (SELECT 1 FROM production_lines WHERE id=? AND active=1)" : "";
   const sql = `INSERT INTO queue_actions
     (id,actor_id,request_hash,action,job_id,work_date,line_id,reason,previous_order,next_order,happened_at)
-    VALUES ((SELECT CASE WHEN revision=? ${jobCheck} THEN ? ELSE NULL END FROM org_settings WHERE id=1),
+    VALUES ((SELECT CASE WHEN revision=? AND ${plannerGuard}${lineCheck}${jobCheck} THEN ? ELSE NULL END FROM org_settings WHERE id=1),
       ?,?,?,?,?,?,?,?,?,?)`;
-  const args: (string|number|null)[] = [revision];
+  const args: (string|number|null)[] = [revision,actor.id];
+  if (requireActiveLine) args.push(line);
   if (jobGuard) args.push(jobGuard.id,jobGuard.version);
   args.push(op.ids[0],actor.id,op.hash,action,jobId,date,line,reason,JSON.stringify(before),JSON.stringify(after),at);
   return db.prepare(sql).bind(...args);
@@ -55,11 +59,22 @@ async function apply(db:D1Database, statements:D1PreparedStatement[]) {
   catch(error) { if (isConstraint(error)) throw conflict(); throw unavailable(); }
 }
 
+// Idempotent insert replies use the created snapshot while the job exists.
+// A permanently deleted job has no event snapshot by design; never insert it twice.
+async function insertedReplay(db:D1Database,actor:User,op:Operation,at:number) {
+  const prior = await priorChange(db,actor,op,"insert");
+  if (!prior) return null;
+  const stored = await replay(db,actor,op);
+  if (stored) return stored[0];
+  if (prior.job_id) return findJob(db,actor,prior.job_id,at);
+  throw conflict();
+}
+
 export async function insertQueue(db:D1Database,actor:User, data:Change & {job:JobInput;aboveQueue:number},
   op:Operation,at:number) {
   requirePlanner(actor);
-  const replay = await priorChange(db,actor,op,"insert");
-  if (replay?.job_id) return findJob(db,actor,replay.job_id,at);
+  const previous = await insertedReplay(db,actor,op,at);
+  if (previous) return previous;
   const row = data.job;
   const before = waiting(await queue(db,row.workDate,row.lineId));
   const ordinary = before.filter(row => row.inserted_number === null);
@@ -74,7 +89,7 @@ export async function insertQueue(db:D1Database,actor:User, data:Change & {job:J
     .bind(row.workDate,row.lineId).first<{n:number}>();
   if (!number) throw unavailable();
   const statements = [
-    record(db,actor,op,"insert",jobId,row.workDate,row.lineId,data.reason,ids(before),next,at,data.expectedRevision),
+    record(db,actor,op,"insert",jobId,row.workDate,row.lineId,data.reason,ids(before),next,at,data.expectedRevision,undefined,true),
     db.prepare(`INSERT INTO jobs(id,title,description,target_skids,day_order,queue_position,inserted_number,work_date,line_id,created_by,created_at,updated_at,operation_id)
       SELECT ?,?,?,?,(SELECT COALESCE(MAX(day_order),0)+1 FROM jobs WHERE work_date BETWEEN ? AND ?),
         ?,?,?,?,?,?,?,? WHERE ${plannerGuard} AND EXISTS (SELECT 1 FROM production_lines WHERE id=? AND active=1)`)
@@ -87,7 +102,14 @@ export async function insertQueue(db:D1Database,actor:User, data:Change & {job:J
       FROM jobs j WHERE j.id=?`)
       .bind(crypto.randomUUID(),actor.id,at,op.ids[0],op.hash,jobId),
   ];
-  await apply(db,statements);
+  try { await apply(db,statements); }
+  catch(error) {
+    if (error instanceof ApiError && error.status===409) {
+      const previous = await insertedReplay(db,actor,op,at);
+      if (previous) return previous;
+    }
+    throw error;
+  }
   return findJob(db,actor,jobId,at);
 }
 
@@ -97,11 +119,21 @@ export async function reorderQueue(db:D1Database,actor:User, data:Change & {work
   if (await priorChange(db,actor,op,"reorder")) return;
   const before = ids(waiting(await queue(db,data.workDate,data.lineId)));
   if (before.length !== data.ids.length || before.some(id=>!data.ids.includes(id))) throw conflict();
-  if (before.every((id,i)=>id===data.ids[i])) return;
-  await apply(db,[
-    record(db,actor,op,"reorder",null,data.workDate,data.lineId,data.reason,before,data.ids,at,data.expectedRevision),
-    ...positions(db,data.ids),
-  ]);
+  if (before.every((id,i)=>id===data.ids[i])) {
+    const current = await db.prepare(`SELECT revision FROM org_settings WHERE id=1 AND ${plannerGuard}`)
+      .bind(actor.id).first<{revision:number}>();
+    if (!current || current.revision!==data.expectedRevision) throw conflict();
+    return;
+  }
+  try {
+    await apply(db,[
+      record(db,actor,op,"reorder",null,data.workDate,data.lineId,data.reason,before,data.ids,at,data.expectedRevision),
+      ...positions(db,data.ids),
+    ]);
+  } catch(error) {
+    if (error instanceof ApiError && error.status===409 && await priorChange(db,actor,op,"reorder")) return;
+    throw error;
+  }
 }
 
 export async function changeQueueJob(db:D1Database,actor:User,id:string,action:"delete"|"cancel"|"recall",
@@ -127,9 +159,13 @@ export async function changeQueueJob(db:D1Database,actor:User,id:string,action:"
     statements.push(db.prepare("DELETE FROM job_events WHERE job_id=?").bind(id));
     statements.push(db.prepare("DELETE FROM jobs WHERE id=? AND status='todo' AND started_at IS NULL").bind(id));
   } else {
-    statements.push(db.prepare("UPDATE jobs SET cancelled_at=? WHERE id=? AND status='todo'")
-      .bind(action==="cancel"?at:null,id));
+    statements.push(db.prepare("UPDATE jobs SET cancelled_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='todo'")
+      .bind(action==="cancel"?at:null,at,id,data.expectedVersion));
   }
   statements.push(...positions(db,next));
-  await apply(db,statements);
+  try { await apply(db,statements); }
+  catch(error) {
+    if (error instanceof ApiError && error.status===409 && await priorChange(db,actor,op,action)) return;
+    throw error;
+  }
 }

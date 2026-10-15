@@ -106,3 +106,30 @@ test("Insert, Delete, Cancel and Recall all require reasons and preserve queue l
   await expect(base).toHaveCount(0);
   await expect(inserted).toHaveCount(1);
 });
+
+test("Inserting during an unlocked clean queue relocks and rehydrates the latest rows", async ({page}) => {
+  await page.goto("/fill-task");
+  const stamp=crypto.randomUUID().slice(0,8);
+  const title="Unlock insert "+stamp;
+  await page.getByRole("textbox",{name:"Task",exact:true}).fill(title);
+  await page.getByRole("button",{name:"Save tasks"}).click();
+  await expect(page.locator('[data-testid="queue-row"]').filter({hasText:title})).toHaveCount(1);
+
+  await page.getByRole("button",{name:"Unlock Queue"}).click();
+  await expect(page.getByRole("button",{name:"Lock Queue",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Add Queue",exact:true}).click();
+  const added="During unlock "+stamp;
+  await page.locator("#queue-new-title").fill(added);
+  await page.getByRole("button",{name:"Insert & Confirm"}).click();
+  const dialog=page.getByRole("dialog",{name:"Reason required"});
+  await dialog.getByTestId("queue-save-reason").fill("Urgent order");
+  await dialog.getByRole("button",{name:"Confirm & Save"}).click();
+
+  const inserted=page.locator('[data-testid="queue-row"]').filter({hasText:added});
+  await expect(page.getByRole("button",{name:"Unlock Queue"})).toBeVisible();
+  await expect(inserted).toHaveCount(1);
+  await expect(inserted).toHaveAttribute("data-drag-enabled","false");
+  await page.getByRole("button",{name:"Unlock Queue"}).click();
+  await expect(inserted).toHaveAttribute("data-drag-enabled","true");
+  await expect(page.getByTestId("queue-undo-btn")).toBeDisabled();
+});

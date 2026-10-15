@@ -29,6 +29,7 @@ export function QueueManagement({ week, lines, jobs, revision, selectedDate, onE
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scope, setScope] = useState<{date:string;lineId:string;jobs:Job[];revision:number}|null>(null);
+  const syncUnlockAfterSave = useRef(false);
   const drag = useRef<{id:string;pointerId:number;x:number;y:number;lastTarget:string|null}|null>(null);
   const [dropTarget,setDropTarget] = useState<string|null>(null);
   const ready = scope?.date === date && scope.lineId === lineId;
@@ -53,17 +54,30 @@ export function QueueManagement({ week, lines, jobs, revision, selectedDate, onE
     const controller = new AbortController();
     const load = async () => {
       try {
-        const full: Job[] = [];
-        let cursor: string | null = null;
-        do {
-          const params = new URLSearchParams({from:date,to:date,lineId,limit:"100"});
-          if (cursor) params.set("cursor",cursor);
-          const page = await api.jobs(params,controller.signal);
-          full.push(...page.data.jobs);
-          cursor = page.data.nextCursor;
-        } while (cursor && !controller.signal.aborted);
-        const stamp = await api.changes(controller.signal);
-        if (!controller.signal.aborted) setScope({date,lineId,jobs:full,revision:stamp.data.revision});
+        // Never pair jobs read at one revision with a newer queue revision.
+        for (let attempt=0; attempt<2 && !controller.signal.aborted; attempt++) {
+          const before = await api.changes(controller.signal);
+          const full: Job[] = [];
+          let cursor: string | null = null;
+          do {
+            const params = new URLSearchParams({from:date,to:date,lineId,limit:"100"});
+            if (cursor) params.set("cursor",cursor);
+            const page = await api.jobs(params,controller.signal);
+            full.push(...page.data.jobs);
+            cursor = page.data.nextCursor;
+          } while (cursor && !controller.signal.aborted);
+          if (controller.signal.aborted) return;
+          const after = await api.changes(controller.signal);
+          if (before.data.revision===after.data.revision &&
+              before.data.businessDate===after.data.businessDate) {
+            setScope({date,lineId,jobs:full,revision:after.data.revision});
+            return;
+          }
+        }
+        if (!controller.signal.aborted) {
+          setScope(null);
+          setMessage("Queue changed while loading. Refresh to retry.");
+        }
       } catch(error) {
         if (!controller.signal.aborted) {setScope(null);setMessage(friendlyError(error));}
       }
@@ -71,7 +85,22 @@ export function QueueManagement({ week, lines, jobs, revision, selectedDate, onE
     void load();
     return () => controller.abort();
   },[date,lineId,revision]);
-  useEffect(() => { if (!unlocked) {setHistory([ids]);setBaseIds(ids);} }, [key,unlocked,date,lineId]);
+  useEffect(() => {
+    if (!unlocked) {
+      syncUnlockAfterSave.current = false;
+      setHistory([ids]);
+      setBaseIds(ids);
+    }
+  }, [key,unlocked,date,lineId]);
+  // After Save, advance the editing revision only with a validated jobs snapshot.
+  useEffect(() => {
+    if (!syncUnlockAfterSave.current || !unlocked || !ready || !scope ||
+        scope.revision <= unlockRevision) return;
+    syncUnlockAfterSave.current = false;
+    setUnlockRevision(scope.revision);
+    setHistory([ids]);
+    setBaseIds(ids);
+  }, [scope,ready,unlocked,key,unlockRevision]);
   useEffect(() => {
     if (!dirty || !unlocked) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -104,7 +133,7 @@ export function QueueManagement({ week, lines, jobs, revision, selectedDate, onE
         await api.reorderQueue({workDate:date,lineId,ids:draftIds,expectedRevision:unlockRevision,reason:reason.trim()},key);
         setHistory([[...draftIds]]);
         setBaseIds([...draftIds]);
-        setUnlockRevision(viewRevision+1);
+        syncUnlockAfterSave.current = true;
       } else if (confirm.kind === "insert") {
         const target = Number(draft.targetSkids);
         await api.insertQueue({job:{title:draft.title.trim(),description:draft.description,
@@ -116,6 +145,7 @@ export function QueueManagement({ week, lines, jobs, revision, selectedDate, onE
           expectedVersion:confirm.job.version,expectedRevision:viewRevision,reason:reason.trim(),
         },key);
       }
+      if (confirm.kind !== "reorder") setUnlocked(false);
       setConfirm(null); setReason("");
       setMessage("Queue change saved successfully.");
       await refresh();

@@ -82,7 +82,7 @@ describe("Queue management (D1 transactional operations)", () => {
       const live=await (await f.request("/api/live")).json() as {data:{queued:{id:string}[]}};
       expect(live.data.queued.some(job=>job.id===a.id)).toBe(false);
       expect((await f.request(`/api/jobs/${a.id}/start`,{user:"manager",key:crypto.randomUUID(),body:{expectedVersion:1}})).status).toBe(409);
-      expect((await action(a.id,"recall",{expectedVersion:1,reason:"Customer restored",expectedRevision:await revision()})).status).toBe(200);
+      expect((await action(a.id,"recall",{expectedVersion:2,reason:"Customer restored",expectedRevision:await revision()})).status).toBe(200);
       const afterRecall=successSchema(jobsDataSchema).parse(await (await f.request(
         `/api/jobs?from=${date}&to=${date}`)).json()).data.jobs;
       expect(afterRecall.find(job=>job.id===a.id)?.cancelledAt).toBeNull();
@@ -95,6 +95,80 @@ describe("Queue management (D1 transactional operations)", () => {
       const done=await f.request(`/api/jobs/${b.id}/done`,{user:"manager",key:crypto.randomUUID(),body:{expectedVersion:3}});
       expect(done.status).toBe(200);
       expect(successSchema(jobDataSchema).parse(await done.json()).data.job.status).toBe("done");
+    } finally { await f.close(); }
+  });
+
+  it("rolls back inactive-line inserts atomically, but permits cancellation of existing jobs", async () => {
+    const f = await createFixture();
+    try {
+      const date = businessDate(Date.now());
+      const created = await f.request("/api/jobs",{user:"manager",key:crypto.randomUUID(),body:{
+        items:[{title:"Existing waiting",workDate:date,lineId:LINES.ckt1a}],
+      }});
+      expect(created.status).toBe(201);
+      const job = successSchema(bulkJobsDataSchema).parse(await created.json()).data.jobs[0];
+      await f.database.prepare("UPDATE production_lines SET active=0 WHERE id=?").bind(LINES.ckt1a).run();
+      const revision = (await f.database.prepare("SELECT revision FROM org_settings WHERE id=1").first<{revision:number}>())!.revision;
+      const beforeCount = (await f.database.prepare("SELECT count(*) AS n FROM queue_actions").first<{n:number}>())!.n;
+      const failed = await f.request("/api/queue/insert",{user:"manager",key:crypto.randomUUID(),body:{
+        job:{title:"Should not exist",workDate:date,lineId:LINES.ckt1a},
+        aboveQueue:1,reason:"Invalid closed line",expectedRevision:revision,
+      }});
+      expect(failed.status).toBe(409);
+      expect((await f.database.prepare("SELECT revision FROM org_settings WHERE id=1").first<{revision:number}>())?.revision).toBe(revision);
+      expect((await f.database.prepare("SELECT count(*) AS n FROM queue_actions").first<{n:number}>())?.n).toBe(beforeCount);
+      expect((await f.database.prepare("SELECT count(*) AS n FROM jobs WHERE title='Should not exist'").first<{n:number}>())?.n).toBe(0);
+      const cancel = await f.request(`/api/queue/${job.id}/cancel`,{user:"manager",key:crypto.randomUUID(),body:{
+        expectedVersion:job.version,reason:"Close obsolete order",expectedRevision:revision,
+      }});
+      expect(cancel.status).toBe(200);
+    } finally { await f.close(); }
+  });
+
+  it("advances job version across Cancel/Recall so a stale Start cannot succeed", async () => {
+    const f=await createFixture();
+    try {
+      const date=businessDate(Date.now());
+      const make=await f.request("/api/jobs",{user:"manager",key:crypto.randomUUID(),body:{
+        items:[{title:"ABA task",workDate:date,lineId:LINES.ckt1a}],
+      }});
+      const job=successSchema(bulkJobsDataSchema).parse(await make.json()).data.jobs[0];
+      const rev=async()=> (await f.database.prepare("SELECT revision FROM org_settings WHERE id=1").first<{revision:number}>())!.revision;
+      expect((await f.request(`/api/queue/${job.id}/cancel`,{user:"manager",key:crypto.randomUUID(),body:{
+        expectedVersion:1,reason:"Hold",expectedRevision:await rev(),
+      }})).status).toBe(200);
+      expect((await f.request(`/api/queue/${job.id}/recall`,{user:"manager",key:crypto.randomUUID(),body:{
+        expectedVersion:2,reason:"Reopen",expectedRevision:await rev(),
+      }})).status).toBe(200);
+      expect((await f.database.prepare("SELECT version FROM jobs WHERE id=?").bind(job.id).first<{version:number}>())?.version).toBe(3);
+      expect((await f.request(`/api/jobs/${job.id}/start`,{user:"manager",key:crypto.randomUUID(),body:{
+        expectedVersion:1,
+      }})).status).toBe(409);
+      expect((await f.request(`/api/jobs/${job.id}/start`,{user:"manager",key:crypto.randomUUID(),body:{
+        expectedVersion:3,
+      }})).status).toBe(200);
+    } finally { await f.close(); }
+  });
+
+  it("replays the original Insert snapshot after the job starts and rejects stale no-op reorders", async () => {
+    const f=await createFixture();
+    try {
+      const date=businessDate(Date.now());
+      const rev=async()=> (await f.database.prepare("SELECT revision FROM org_settings WHERE id=1").first<{revision:number}>())!.revision;
+      const key=crypto.randomUUID();
+      const body={job:{title:"Replay job",workDate:date,lineId:LINES.ckt1a},aboveQueue:1,reason:"Priority",expectedRevision:await rev()};
+      const created=await f.request("/api/queue/insert",{user:"manager",key,body});
+      expect(created.status).toBe(201);
+      const first=successSchema(jobDataSchema).parse(await created.json()).data.job;
+      const noOp=await f.request("/api/queue/reorder",{user:"manager",key:crypto.randomUUID(),body:{
+        workDate:date,lineId:LINES.ckt1a,ids:[first.id],reason:"Check stale",expectedRevision:body.expectedRevision,
+      }});
+      expect(noOp.status).toBe(409);
+      expect((await f.request(`/api/jobs/${first.id}/start`,{user:"manager",key:crypto.randomUUID(),body:{expectedVersion:1}})).status).toBe(200);
+      const again=await f.request("/api/queue/insert",{user:"manager",key,body});
+      expect(again.status).toBe(201);
+      const replayed=successSchema(jobDataSchema).parse(await again.json()).data.job;
+      expect(replayed).toMatchObject({id:first.id,status:"todo",version:1});
     } finally { await f.close(); }
   });
 });
