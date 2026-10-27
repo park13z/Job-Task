@@ -1,5 +1,27 @@
 import { test, expect } from "@playwright/test";
 
+test("Fill Task starts on today's Toronto date each time it opens", async ({ page }) => {
+  // UTC has crossed midnight, but Toronto is still on October 27.
+  await page.clock.setFixedTime(new Date("2026-10-28T01:00:00.000Z"));
+  await page.goto("/fill-task");
+  const workDate = page.getByRole("combobox", { name: "Work date" });
+  await expect(workDate).toContainText("2026-10-27");
+
+  await workDate.click();
+  await page.getByRole("option", { name: "2026-10-26" }).click();
+  await expect(workDate).toContainText("2026-10-26");
+
+  await page.getByRole("button", { name: "Dashboard" }).click();
+  await page.getByRole("button", { name: "Fill Task" }).click();
+  await expect(workDate).toContainText("2026-10-27");
+
+  // A different planning week must keep its work date inside that week.
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(workDate).toContainText("2026-11-02");
+  await page.getByRole("button", { name: "This week" }).click();
+  await expect(workDate).toContainText("2026-10-27");
+});
+
 test("Fill Task keeps the selected work date after save and for subsequent rows", async ({ page }) => {
   await page.goto("/fill-task");
   const workDate = page.getByRole("combobox", { name: "Work date" });

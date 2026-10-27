@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { v4 as newUuid } from "uuid";
 import { AlertCircle, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { bulkJobInputSchema, editJobInputSchema, type Job, type Line, type JobTemplate } from "../shared/contracts";
-import { addDays, mondayWeekRange } from "../shared/time";
+import { addDays, businessDate, mondayWeekRange } from "../shared/time";
 import { api, ApiError } from "../lib/api";
 import { friendlyError, operationKey, type Pending } from "../lib/operation";
 import { Button, Dialog, Input, Label, Select, Textarea } from "../components/ui";
@@ -15,9 +15,11 @@ function FieldError({ message, id }: { message?: string; id: string }) { return 
 
 export function FillTask({ week, lines, jobs, revision, refresh }: { week: string; lines: Line[]; jobs: Job[]; revision: number; refresh: () => Promise<void> }) {
   const range = mondayWeekRange(week);
+  const today = businessDate(Date.now());
+  const defaultWorkDate = today >= range.from && today <= range.to ? today : range.from;
   const activeLines = lines.filter(line => line.active);
-  const [selectedWorkDate, setSelectedWorkDate] = useState(range.from);
-  const [rows, setRows] = useState<Row[]>([makeRow(range.from, activeLines[0]?.id ?? "")]);
+  const [selectedWorkDate, setSelectedWorkDate] = useState(defaultWorkDate);
+  const [rows, setRows] = useState<Row[]>([makeRow(defaultWorkDate, activeLines[0]?.id ?? "")]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export function FillTask({ week, lines, jobs, revision, refresh }: { week: strin
   const [editing, setEditing] = useState<Job | null>(null);
   const [editRow, setEditRow] = useState<Row | null>(null);
   const editPending = useRef<Pending | null>(null);
-  useEffect(() => { setSelectedWorkDate(range.from); setRows([makeRow(range.from, activeLines[0]?.id ?? "")]); setChoices({}); pending.current = null; setErrors({}); }, [range.from]);
+  useEffect(() => { setSelectedWorkDate(defaultWorkDate); setRows([makeRow(defaultWorkDate, activeLines[0]?.id ?? "")]); setChoices({}); pending.current = null; setErrors({}); }, [range.from]);
   const days = Array.from({ length: 7 }, (_, i) => addDays(range.from, i));
   const nextOrder = Math.max(0, ...jobs.filter(job => job.workDate >= range.from && job.workDate <= range.to).map(job => job.dayOrder)) + 1;
   const update = (id: string, field: keyof Row, value: string) => { if (field === "workDate") setSelectedWorkDate(value); setRows(current => current.map(row => row.id === id ? { ...row, [field]: value } : row)); setErrors({}); };
